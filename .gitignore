@@ -1,0 +1,6 @@
+.stack-work/
+icfpc2018.cabal
+*~
+*.swp
+*.hi
+*.o
