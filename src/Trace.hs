@@ -52,12 +52,35 @@ instance Coded Axis where
 instance Coded ShortLinDiff where
   encode (ShortLinDiff axis n) = do
     encode axis
-    putBits 3 0 n
+    putBits 3 0 (n+5)
 
   decode = do
     axis <- decode
     n <- getBits 3 0 0
-    return $ ShortLinDiff axis n
+    return $ ShortLinDiff axis (n-5)
+
+instance Coded LongLinDiff where
+  encode (LongLinDiff axis n) = do
+    encode axis
+    putBits 4 0 (n+15)
+
+  decode = do
+    axis <- decode
+    n <- getBits 4 0 0
+    return $ LongLinDiff axis (n-15)
+
+instance Coded NearDiff where
+  encode (NearDiff dx dy dz) = do
+    let n =  (dx + 1) * 9 + (dy + 1) * 3 + (dz + 1)
+    putBits 4 0 n
+
+  decode = do
+    n <- getBits 4 0 0
+    let z = n `mod` 3
+        xy = n `div` 3
+        y = xy `mod` 3
+        x = xy `div` 3
+    return $ NearDiff (x-1) (y-1) (z-1)
 
 encodeL :: Coded a => a -> L.ByteString
 encodeL x = runPutL . runEncode $ encode x >> flush
