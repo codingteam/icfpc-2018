@@ -50,3 +50,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - icfpc2018
+    - tasty
+    - tasty-hunit
