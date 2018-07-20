@@ -24,7 +24,16 @@ tests = testGroup "Tests" [specExamples]
 specExamples :: TestTree
 specExamples = testGroup "Specification examples"
   [
-    testCase "encode.SMove.1" $
+    testCase "encode.Halt" $
+      testEncode Halt @?= "11111111"
+
+  , testCase "encode.Wait" $
+      testEncode Wait @?= "11111110"
+
+  , testCase "encode.Flip" $
+      testEncode Flip @?= "11111101"
+
+  , testCase "encode.SMove.1" $
       testEncode (SMove (LongLinDiff X 12)) @?= "00010100 00011011"
   , testCase "encode.SMove.2" $
       testEncode (SMove (LongLinDiff Z (-4))) @?= "00110100 00001011"
@@ -46,5 +55,3 @@ specExamples = testGroup "Specification examples"
   , testCase "encode.Fill" $
       testEncode (Fill (NearDiff 0 (-1) 0)) @?= "01010011"
   ]
-
-
