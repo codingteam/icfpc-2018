@@ -19,7 +19,7 @@ main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Tests" [specExamples]
+tests = testGroup "Tests" [specExamples, codec]
 
 specExamples :: TestTree
 specExamples = testGroup "Specification examples"
@@ -54,4 +54,34 @@ specExamples = testGroup "Specification examples"
 
   , testCase "encode.Fill" $
       testEncode (Fill (NearDiff 0 (-1) 0)) @?= "01010011"
+  ]
+
+testCodecFor :: (Eq a, Show a, Coded a) => a -> Assertion
+testCodecFor value =
+  let
+    encoded = encodeL value
+    decoded = runGetL (runDecode $ decode) encoded
+  in decoded @?= value
+
+codec :: TestTree
+codec = testGroup "Encoding-then-decoding returns the same value"
+  [
+    testCase "Halt" $ testCodecFor Halt
+
+  , testCase "Wait" $ testCodecFor Wait
+
+  , testCase "Flip" $ testCodecFor Flip
+
+  , testCase "SMove" $ testCodecFor (SMove (LongLinDiff X 12))
+
+  , testCase "LMove" $
+      testCodecFor (LMove (ShortLinDiff X 3) (ShortLinDiff Y (-5)))
+
+  , testCase "FusionP" $ testCodecFor (FusionP (NearDiff (-1) 1 0))
+
+  , testCase "FusionS" $ testCodecFor (FusionS (NearDiff 1 (-1) 0))
+
+  , testCase "Fission" $ testCodecFor (Fission (NearDiff 0 0 1) 5)
+
+  , testCase "Fill" $ testCodecFor (Fill (NearDiff 0 (-1) 0))
   ]
