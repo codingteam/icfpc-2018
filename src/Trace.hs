@@ -29,7 +29,7 @@ data Command =
   | Flip
   | SMove LongLinDiff
   | LMove ShortLinDiff ShortLinDiff
-  | Fission NearDiff Int
+  | Fission NearDiff Word8
   | Fill NearDiff
   | FusionP NearDiff
   | FusionS NearDiff
@@ -100,6 +100,23 @@ instance Coded Command where
     putBits 3 0 (0b1100 :: Int)
     putBits 3 0 (i2+5)
     putBits 3 0 (i1+5)
+
+  encode (FusionP nd) = do
+    encode nd
+    putBits 2 0 (0b111 :: Int)
+
+  encode (FusionS nd) = do
+    encode nd
+    putBits 2 0 (0b110 :: Int)
+
+  encode (Fission nd m) = do
+    encode nd
+    putBits 2 0 (0b101 :: Int)
+    putBits 7 0 m
+
+  encode (Fill nd) = do
+    encode nd
+    putBits 2 0 (0b011 :: Int)
 
 encodeL :: Coded a => a -> L.ByteString
 encodeL x = runPutL . runEncode $ encode x >> flush
