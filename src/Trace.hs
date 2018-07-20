@@ -135,3 +135,6 @@ testEncode x = showBits $ encodeL x
 testDecode :: Coded a => [Word8] -> a
 testDecode bytes = runGetL (runDecode $ decode) $ L.pack bytes
 
+writeTrace :: FilePath -> [Command] -> IO ()
+writeTrace path commands = L.writeFile path $ encodeR (encodeMany commands)
+
