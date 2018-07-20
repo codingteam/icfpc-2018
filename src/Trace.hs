@@ -1,4 +1,4 @@
-
+{-# LANGUAGE BinaryLiterals #-}
 module Trace where
 
 import Data.Bits
@@ -81,6 +81,25 @@ instance Coded NearDiff where
         y = xy `mod` 3
         x = xy `div` 3
     return $ NearDiff (x-1) (y-1) (z-1)
+
+instance Coded Command where
+  encode Halt = putBits 7 0 (0b11111111 :: Word8)
+  encode Wait = putBits 7 0 (0b11111110 :: Word8)
+  encode Flip = putBits 7 0 (0b11111101 :: Word8)
+
+  encode (SMove (LongLinDiff a i)) = do
+    putBits 1 0 (0b00 :: Int)
+    encode a
+    putBits 3 0 (0b0100 :: Int)
+    putBits 2 0 (0b000 :: Int)
+    putBits 4 0 (i+15)
+
+  encode (LMove (ShortLinDiff a1 i1) (ShortLinDiff a2 i2)) = do
+    encode a2
+    encode a1
+    putBits 3 0 (0b1100 :: Int)
+    putBits 3 0 (i2+5)
+    putBits 3 0 (i1+5)
 
 encodeL :: Coded a => a -> L.ByteString
 encodeL x = runPutL . runEncode $ encode x >> flush
