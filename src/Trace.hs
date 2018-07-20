@@ -118,6 +118,60 @@ instance Coded Command where
     encode nd
     putBits 2 0 (0b011 :: Int)
 
+  decode = do
+    byte <- getBits 7 0 (0 :: Word8)
+    case byte of
+      0b11111111 -> return Halt
+      0b11111110 -> return Wait
+      0b11111101 -> return Flip
+      _ ->
+        if byte .&. 0b11001111 == 0b00000100
+          then do
+            let lld_a = shift (byte .&. 0b110000) (-4)
+            sndByte <- getBits 7 0 (0 :: Word8)
+            let lld_i = sndByte .&. 0b11111
+
+            let lld = testDecode [(shift lld_a 6) .|. (shift lld_i 1)]
+
+            return $ SMove lld
+          else
+            if byte .&. 0b1111 == 0b1100
+              then do -- LMove
+                let sid2_a = shift (byte .&. 0b11000000) (-6)
+                let sid1_a = shift (byte .&. 0b00110000) (-4)
+
+                sndByte <- getBits 7 0 (0 :: Word8)
+
+                let sid2_i = shift (sndByte .&. 0b11110000) (-4)
+                let sid1_i = sndByte .&. 0b1111
+
+                let sid1 = testDecode [(shift sid1_a 6) .|. (shift sid1_i 2)]
+                let sid2 = testDecode [(shift sid2_a 6) .|. (shift sid2_i 2)]
+
+                return $ LMove sid1 sid2
+              else
+                if byte .&. 0b111 == 0b111
+                then do
+                  let nd = testDecode [byte]
+                  return $ FusionP nd
+                else
+                  if byte .&. 0b111 == 0b110
+                    then do
+                      let nd = testDecode [byte]
+                      return $ FusionS nd
+                    else
+                      if byte .&. 0b111 == 0b101
+                        then do
+                          let nd = testDecode [byte]
+                          m <- getBits 7 0 (0 :: Word8)
+                          return $ Fission nd m
+                        else
+                          if byte .&. 0b111 == 0b011
+                            then do
+                              let nd = testDecode [byte]
+                              return $ Fill nd
+                            else error "Command.decode: invalid input"
+
 encodeL :: Coded a => a -> L.ByteString
 encodeL x = runPutL . runEncode $ encode x >> flush
 
