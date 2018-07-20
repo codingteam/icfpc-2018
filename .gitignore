@@ -4,3 +4,6 @@ icfpc2018.cabal
 *.swp
 *.hi
 *.o
+icfpc2018.iml
+/.idea/
+/out/
