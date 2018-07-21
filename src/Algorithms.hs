@@ -113,20 +113,20 @@ dumbFill bid = do
 runTest2 :: FilePath -> Generator () -> IO ()
 runTest2 path gen = do
   model <- decodeFile path
-  let trace = makeTrace model gen
+  trace <- makeTrace model gen
   print trace
   writeTrace "test2.nbt" trace
 
 dumbHighSolver :: FilePath -> FilePath -> IO ()
 dumbHighSolver modelPath tracePath = do
   model <- decodeFile modelPath
-  let trace = makeTrace model $ do
+  trace <- makeTrace model $ do
                 let bid = 0
                 -- issueFlip bid
                 dumbFill bid
                 move bid (0,0,0)
                 -- issueFlip bid
                 issue bid Halt
-  print trace
+--   print trace
   writeTrace tracePath trace
 

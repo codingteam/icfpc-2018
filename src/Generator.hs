@@ -11,6 +11,7 @@ import Data.Ord
 import qualified Data.Sequence as Seq
 import Data.Sequence ((|>))
 import qualified Data.Array.BitArray as BA
+import qualified Data.Array.BitArray.IO as BAIO
 
 import Trace
 import Sim
@@ -41,7 +42,7 @@ data GeneratorState = GS {
     gsModel :: ModelFile,
     gsHarmonics :: Harmonics,
     gsFilled :: BA.BitArray P3, -- voxels that are already filled by generator
-    gsGrounded :: BA.BitArray P3, -- grounded voxels
+    gsGrounded :: BAIO.IOBitArray P3, -- grounded voxels
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
     gsBots :: Array BID BotState,
@@ -51,17 +52,18 @@ data GeneratorState = GS {
 maxBID :: BID
 maxBID = 20
 
-initState :: ModelFile -> GeneratorState
-initState model = GS model Low filled grounded 0 [(0,[bid])] bots traces
+initState :: ModelFile -> IO GeneratorState
+initState model = do
+    grounded <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
+    return $ GS model Low filled grounded 0 [(0,[bid])] bots traces
   where
     bid = 0
     bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) []) | bid <- [0 .. maxBID]]
     traces = array (0, maxBID) [(bid, Seq.empty) | bid <- [0 .. maxBID]]
     r = mfResolution model
     filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
-    grounded = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
 
-type Generator a = State GeneratorState a
+type Generator a = StateT GeneratorState IO a
 
 getBotTrace :: BID -> Generator BotTrace
 getBotTrace bid = do
@@ -132,27 +134,30 @@ issueFill bid nd = do
   where
     updateGrounded :: P3 -> Generator Bool
     updateGrounded p@(x,y,z) = do
-        filled <- gets gsFilled
         grounded <- gets gsGrounded
-        let result = check filled grounded p
-        modify $ \st -> st {gsGrounded = gsGrounded st BA.// [(p, result)]}
+        result <- check grounded p
+        setGrounded grounded p result
         return result
-      where
-        check _ _ (_,0,_) = True
-        check filled grounded p@(x,y,z) =
-          if filled BA.! p
-            then
-              let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
-                                (x-1, y, z), (x, y-1, z), (x, y, z-1)]
-              in  or [grounded BA.! neighbour | neighbour <- neighbours]
-            else False
+
+    setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
+    setGrounded bits p ok =
+      lift $ BAIO.writeArray bits p ok
+
+    -- we just filled this voxel by issuing Fill command
+    check _ (_,0,_) = return True
+    check grounded p@(x,y,z) = do
+          let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
+                            (x-1, y, z), (x, y-1, z), (x, y, z-1)]
+          neighbGrounded <- forM neighbours $ \n ->
+                                lift $ BAIO.readArray grounded n
+          return $ or neighbGrounded
 
 -- | Is voxel grounded?
 -- This works by definition, i.e. always returns False for non-filled voxels.
 isGrounded :: P3 -> Generator Bool
 isGrounded p = do
   grounded <- gets gsGrounded
-  return $ grounded BA.! p
+  lift $ BAIO.readArray grounded p
 
 -- | Will voxel become grounded if we fill it?
 -- This checks if any neighbour voxel is grounded.
@@ -161,14 +166,23 @@ willBeGrounded (x,y,z) = do
   grounded <- gets gsGrounded
   let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
                     (x-1, y, z), (x, y-1, z), (x, y, z-1)]
-  return $ or [fromMaybe False (grounded BA.!? neighbour) | neighbour <- neighbours]
+  r <- gets (mfResolution . gsModel)
+  let good (nx,ny,nz) =
+        nx >= 0 && nx < r && ny >= 0 && ny < r && nz >= 0 && nz < r
+  neighbGrounded <- forM neighbours $ \n ->
+                        if good n
+                          then lift $ BAIO.readArray grounded n
+                          else return False
+  return $ or neighbGrounded
 
 allAreGrounded :: Generator Bool
 allAreGrounded = do
   filledMatrix <- gets gsFilled
   let filledIdxs = [idx | idx <- BA.indices filledMatrix, filledMatrix BA.! idx]
   grounded <- gets gsGrounded
-  return $ and [grounded BA.! idx | idx <- filledIdxs]
+  res <- forM filledIdxs $ \p ->
+             lift $ BAIO.readArray grounded p
+  return $ and res
 
 -- | Switch to the next step.
 -- If we did not issue commands for some bots on current steps,
@@ -291,10 +305,10 @@ isFilled p = do
   matrix <- gets gsFilled
   return $ matrix BA.! p
 
-makeTrace :: ModelFile -> Generator a -> [Command]
-makeTrace model gen =
-  let st = execState gen (initState model)
-      traces = gsTraces st
+makeTrace :: ModelFile -> Generator a -> IO [Command]
+makeTrace model gen = do
+  st <- execStateT gen =<< initState model
+  let traces = gsTraces st
       maxLen = maximum $ map length $ elems traces
       botsAliveAtStep step = last [bots | (s, bots) <- gsAliveBots st, s <= step]
       botsCommandsAtStep step = map (botCommand step) [traces ! bid | bid <- botsAliveAtStep step]
@@ -302,7 +316,7 @@ makeTrace model gen =
         if step < length trace
           then trace `Seq.index` step
           else Wait
-  in  concatMap botsCommandsAtStep [0 .. maxLen-1]
+  return $ concatMap botsCommandsAtStep [0 .. maxLen-1]
 
 test1 :: Generator ()
 test1 = do
