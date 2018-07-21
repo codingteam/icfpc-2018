@@ -127,6 +127,6 @@ dumbHighSolver modelPath tracePath = do
                 move bid (0,0,0)
                 -- issueFlip bid
                 issue bid Halt
---   print trace
+  print trace
   writeTrace tracePath trace
 

@@ -39,14 +39,14 @@ type AliveBot = BID
 type P3d = (Int16, Int16, Int16)
 
 data GeneratorState = GS {
-    gsModel :: ModelFile,
+    gsModel :: ! ModelFile,
     gsHarmonics :: Harmonics,
-    gsFilled :: BA.BitArray P3, -- voxels that are already filled by generator
-    gsGrounded :: BAIO.IOBitArray P3, -- grounded voxels
+    gsFilled :: ! (BA.BitArray P3), -- voxels that are already filled by generator
+    gsGrounded :: ! (BAIO.IOBitArray P3), -- grounded voxels
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
     gsBots :: Array BID BotState,
-    gsTraces :: Array BID BotTrace -- Trace is to be filled with Wait if bot does nothing or is not alive.
+    gsTraces :: ! (Array BID BotTrace) -- Trace is to be filled with Wait if bot does nothing or is not alive.
   }
 
 maxBID :: BID
