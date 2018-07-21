@@ -54,7 +54,7 @@ specExamples = testGroup "Specification examples"
   , testCase "encode.Fill" $
       testEncode (Fill (NearDiff 0 (-1) 0)) @?= "01010011"
 
-  , testCsae "encode.GFill" $
+  , testCase "encode.GFill" $
       testEncode (GFill (NearDiff 0 (-1) 0) (FarDiff 10 (-15) 20)) @?= "01010001 00101000 00001111 00110010"
 
   , testCase "encode.GVoid" $
@@ -90,7 +90,7 @@ codec = testGroup "Encoding-then-decoding returns the same value"
 
   , testCase "Fill" $ testCodecFor (Fill (NearDiff 0 (-1) 0))
 
-  , testCsae "GFill" $
+  , testCase "GFill" $
       testCodecFor (GFill (NearDiff 0 (-1) 0) (FarDiff 10 (-15) 20))
 
   , testCase "GVoid" $

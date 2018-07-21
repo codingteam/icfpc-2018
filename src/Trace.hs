@@ -91,18 +91,18 @@ instance Coded NearDiff where
 
 instance Coded FarDiff where
   encode (FarDiff dx dy dz) = do
-    putBits 7 0 ((dx + 30) :: Word8)
-    putBits 7 0 ((dy + 30) :: Word8)
-    putBits 7 0 ((dz + 30) :: Word8)
+    putWord8 (fromIntegral $ dx + 30)
+    putWord8 (fromIntegral $ dy + 30)
+    putWord8 (fromIntegral $ dz + 30)
 
   decode = do
     dx <- getWord8
     dy <- getWord8
     dz <- getWord8
     FarDiff
-      <$> ((fromIntegral dx)-30)
-      <*> ((fromIntegral dy)-30)
-      <*> ((fromIntegral dz)-30)
+      <$> pure ((fromIntegral dx)-30)
+      <*> pure ((fromIntegral dy)-30)
+      <*> pure ((fromIntegral dz)-30)
 
 instance Coded Command where
   encode Halt = putBits 7 0 (0b11111111 :: Word8)
@@ -140,9 +140,15 @@ instance Coded Command where
     encode nd
     putBits 2 0 (0b011 :: Int)
 
-  encode (GFill nd fd) = undefined
+  encode (GFill nd fd) = do
+    encode nd
+    putBits 2 0 (0b001 :: Int)
+    encode fd
 
-  encode (GVoid nd fd) = undefined
+  encode (GVoid nd fd) = do
+    encode nd
+    putBits 2 0 (0b000 :: Int)
+    encode fd
 
   decode = parseOpcode =<< getWord8
     where
@@ -187,6 +193,28 @@ instance Coded Command where
 
         | byte .&. 0b111 == 0b011
           = Fill <$> pure (testDecode [byte])
+
+        | byte .&.0b111 == 0b001 = do
+          {- GFill -}
+          let nd = testDecode [byte]
+
+          dx <- getWord8
+          dy <- getWord8
+          dz <- getWord8
+          let fd = testDecode [dx, dy, dz]
+
+          return $ GFill nd fd
+
+        | byte .&.0b111 == 0b000 = do
+          {- GVoid -}
+          let nd = testDecode [byte]
+
+          dx <- getWord8
+          dy <- getWord8
+          dz <- getWord8
+          let fd = testDecode [dx, dy, dz]
+
+          return $ GVoid nd fd
 
         | otherwise = error "Command.decode: invalid input"
 
