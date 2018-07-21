@@ -100,7 +100,7 @@ flipH High = Low
 issueFlip :: BID -> Generator ()
 issueFlip bid = do
   modify $ \st -> st {gsHarmonics = flipH (gsHarmonics st)}
-  issue bid Flip
+  issue bid mkFlip
 
 -- | Set harmonics to target value
 setHarmonics :: BID -> Harmonics -> Generator ()
@@ -126,7 +126,7 @@ issueFill bid nd = do
     if filled
       then fail $ "Voxel is already filled: " ++ show c'
       else do
-           issue bid $ Fill nd
+           issue bid $ mkFill nd
            modify $ \st -> st {gsFilled = gsFilled st BA.// [(c', True)]}
            updateGrounded c'
   where

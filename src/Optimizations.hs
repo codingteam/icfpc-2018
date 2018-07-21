@@ -39,20 +39,20 @@ optimize cmds = go [cmds] [cmds]
 -- R greater than one.
 splitLMove :: [Command] -> [Command]
 splitLMove [] = []
-splitLMove ((LMove a b):Wait:cmds) =
-  (SMove (fromShortLinDiff a)) : (SMove (fromShortLinDiff b)) : cmds
-splitLMove (cmd:cmds) = cmd : (splitLMove cmds)
+splitLMove (LMove a b _ : Wait _ : cmds) =
+  mkSMove (fromShortLinDiff a) : mkSMove (fromShortLinDiff b) : cmds
+splitLMove (cmd:cmds) = cmd : splitLMove cmds
 
 -- | Turns [SMove a, SMove b] into [SMove x] if a and b are on the same axis
 -- and can be combined.
 mergeSMoves :: [Command] -> [Command]
 mergeSMoves [] = []
-mergeSMoves (m1@(SMove (LongLinDiff a1 d1)):m2@(SMove (LongLinDiff a2 d2)):cmds)
+mergeSMoves (m1@(SMove (LongLinDiff a1 d1) _):m2@(SMove (LongLinDiff a2 d2) _):cmds)
   | (a1 /= a2) || (d1 + d2 < -15) || (d1 + d2 > 15)
-      = m1 : (mergeSMoves (m2:cmds))
+      = m1 : mergeSMoves (m2:cmds)
   | otherwise =
       let d = d1 + d2
       in if d == 0
         then cmds
-        else (SMove (LongLinDiff a1 d)) : cmds
-mergeSMoves (cmd:cmds) = cmd : (mergeSMoves cmds)
+        else mkSMove (LongLinDiff a1 d) : cmds
+mergeSMoves (cmd:cmds) = cmd : mergeSMoves cmds

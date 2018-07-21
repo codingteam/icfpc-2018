@@ -72,7 +72,7 @@ fill bid dir p@(x,y,z) = do
 --           in  or [go m (S.insert neighbour visited) neighbour | neighbour <- nonVisited]
 
 makeLine :: Direction -> Resolution -> Word8 -> Word8 -> [P3]
-makeLine dir r y z = 
+makeLine dir r y z =
   case dir of
     LeftToRight -> [(x,y,z) | x <- [0..r-1]]
     RightToLeft -> [(x,y,z) | x <- reverse [0..r-1]]
@@ -83,7 +83,7 @@ selectFirstInLine dir y z = do
   let coords = makeLine dir r y z
   firstGoodPoint isFilledInModel $ zip coords coords
 
-fillLine :: BID -> Direction -> Word8 -> Word8 -> Generator () 
+fillLine :: BID -> Direction -> Word8 -> Word8 -> Generator ()
 fillLine bid dir y z = do
   mbP1 <- selectFirstInLine dir y z
   case mbP1 of
@@ -99,7 +99,7 @@ fillLine bid dir y z = do
 fillLayer :: BID -> Word8 -> Generator ()
 fillLayer bid y = do
   r <- gets (mfResolution . gsModel)
-  let zs = [0 .. r-1] 
+  let zs = [0 .. r-1]
       dirs = cycle [LeftToRight, RightToLeft]
   forM_ (zip zs dirs) $ \(z, dir) -> do
     fillLine bid dir y z
@@ -109,7 +109,7 @@ dumbFill bid = do
   r <- gets (mfResolution . gsModel)
   forM_ [0 .. r-1] $ \y -> do
     fillLayer bid y
-  
+
 runTest2 :: FilePath -> Generator () -> IO ()
 runTest2 path gen = do
   model <- decodeFile path
@@ -126,7 +126,6 @@ dumbHighSolver modelPath tracePath = do
                 dumbFill bid
                 move bid (0,0,0)
                 -- issueFlip bid
-                issue bid Halt
+                issue bid mkHalt
   print trace
   writeTrace tracePath trace
-
