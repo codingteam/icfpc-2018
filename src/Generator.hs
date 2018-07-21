@@ -103,18 +103,18 @@ step = do
     let traces' = traces // updates
     modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
 
-substractCmd :: P3d -> Command -> P3d
-substractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1)) = (dx-(fromIntegral dx1), dy, dz)
-substractCmd (dx, dy, dz) (SMove (LongLinDiff Y dy1)) = (dx, dy-(fromIntegral dy1), dz)
-substractCmd (dx, dy, dz) (SMove (LongLinDiff Z dz1)) = (dx, dy, dz-(fromIntegral dz1))
-substractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff X dx2)) = (dx-(fromIntegral dx1)-(fromIntegral dx2), dy, dz)
-substractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Y dy2)) = (dx, dy-(fromIntegral dy1)-(fromIntegral dy2), dz)
-substractCmd (dx, dy, dz) (LMove (ShortLinDiff Z dz1) (ShortLinDiff Z dz2)) = (dx, dy, dz-(fromIntegral dz1)-(fromIntegral dz2))
-substractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Y dy2)) = (dx-(fromIntegral dx1), dy-(fromIntegral dy2), dz)
-substractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Z dz2)) = (dx-(fromIntegral dx1), dy, dz-(fromIntegral dz2))
-substractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Z dz2)) = (dx, dy-(fromIntegral dy1), dz-(fromIntegral dz2))
-substractCmd p (LMove sld1 sld2) = substractCmd p (LMove sld2 sld1)
-substractCmd _ c = error $ "Impossible move command: " ++ show c
+subtractCmd :: P3d -> Command -> P3d
+subtractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1)) = (dx-(fromIntegral dx1), dy, dz)
+subtractCmd (dx, dy, dz) (SMove (LongLinDiff Y dy1)) = (dx, dy-(fromIntegral dy1), dz)
+subtractCmd (dx, dy, dz) (SMove (LongLinDiff Z dz1)) = (dx, dy, dz-(fromIntegral dz1))
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff X dx2)) = (dx-(fromIntegral dx1)-(fromIntegral dx2), dy, dz)
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Y dy2)) = (dx, dy-(fromIntegral dy1)-(fromIntegral dy2), dz)
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Z dz1) (ShortLinDiff Z dz2)) = (dx, dy, dz-(fromIntegral dz1)-(fromIntegral dz2))
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Y dy2)) = (dx-(fromIntegral dx1), dy-(fromIntegral dy2), dz)
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Z dz2)) = (dx-(fromIntegral dx1), dy, dz-(fromIntegral dz2))
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Z dz2)) = (dx, dy-(fromIntegral dy1), dz-(fromIntegral dz2))
+subtractCmd p (LMove sld1 sld2) = subtractCmd p (LMove sld2 sld1)
+subtractCmd _ c = error $ "Impossible move command: " ++ show c
 
 origin :: P3
 origin = (0,0,0)
@@ -130,27 +130,27 @@ extractMove p@(dx, dy, dz) =
   in case (dx /= 0, dy /= 0, dz /= 0) of
     (True, True, False) ->
       let cmd = LMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Y (fromIntegral $ clamp5 dy))
-          res = substractCmd p cmd
+          res = subtractCmd p cmd
       in  Right (cmd, res)
     (True, False, True) ->
       let cmd = LMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Z (fromIntegral $ clamp5 dz))
-          res = substractCmd p cmd
+          res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, True, True) ->
       let cmd = LMove (ShortLinDiff Y (fromIntegral $ clamp5 dy)) (ShortLinDiff Z (fromIntegral $ clamp5 dz))
-          res = substractCmd p cmd
+          res = subtractCmd p cmd
       in  Right (cmd, res)
     (True, False, False) ->
       let cmd = SMove (LongLinDiff X $ fromIntegral $ clamp5 dx)
-          res = substractCmd p cmd
+          res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, True, False) ->
       let cmd = SMove (LongLinDiff Y $ fromIntegral $ clamp5 dy)
-          res = substractCmd p cmd
+          res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, False, True) ->
       let cmd = SMove (LongLinDiff Z $ fromIntegral $ clamp5 dz)
-          res = substractCmd p cmd
+          res = subtractCmd p cmd
       in  Right (cmd, res)
     _ -> Left p
 
