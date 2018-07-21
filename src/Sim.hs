@@ -2,7 +2,7 @@
 
 module Sim (
   BID, Seed, P3,
-  BotState,
+  BotState (..),
   WorldState,
   Harmonics(..),
   Voxel(..),

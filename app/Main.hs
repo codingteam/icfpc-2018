@@ -4,6 +4,7 @@ import System.Environment
 
 import Trace
 import Model
+import Generator
 
 main :: IO ()
 main = do
