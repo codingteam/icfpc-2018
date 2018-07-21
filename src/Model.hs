@@ -17,7 +17,9 @@ data ModelFile = ModelFile {
   }
 
 instance Show ModelFile where
-  show m = "<Model of resolution " ++ show (mfResolution m) ++ ">"
+  show model =
+    let res = show (mfResolution model)
+    in concat ["ModelFile ", res, "³"]
 
 getVoxel :: BitArray P3 -> P3 -> Voxel
 getVoxel matrix (x,y,z) =

@@ -8,6 +8,7 @@ import Data.Bits.Coded
 import Data.Bits.Coding
 import Data.Binary.Get (Get)
 import Data.Binary.Put (PutM)
+import Data.Int
 import qualified Data.ByteString.Lazy as L
 import Data.Word
 import Text.Printf
@@ -15,13 +16,14 @@ import Text.Printf
 data Axis = X | Y | Z
   deriving (Eq, Show, Enum)
 
-data ShortLinDiff = ShortLinDiff Axis Int
+data ShortLinDiff = ShortLinDiff Axis Int8
   deriving (Eq, Show)
 
-data LongLinDiff = LongLinDiff Axis Int
+data LongLinDiff = LongLinDiff Axis Int8
   deriving (Eq, Show)
 
-data NearDiff = NearDiff Int Int Int
+data NearDiff = NearDiff Int8 Int8 Int8
+
   deriving (Eq, Show)
 
 data Command =
