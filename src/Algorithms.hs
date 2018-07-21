@@ -49,8 +49,9 @@ fill bid dir p@(x,y,z) = do
     grounded <- willBeGrounded p
     unless grounded $
       setHarmonics bid High
-    issueFill bid diff'
-    setHarmonics bid Low
+    grounded' <- issueFill bid diff'
+    when grounded' $
+      setHarmonics bid Low
     step
 
 -- This would be too slow

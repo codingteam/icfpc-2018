@@ -117,7 +117,8 @@ negateNear (NearDiff dx dy dz) = NearDiff (-dx) (-dy) (-dz)
 
 -- | Issue the Fill command
 -- This will mark the voxel as filled in generator's state
-issueFill :: BID -> NearDiff -> Generator ()
+-- Returns True if as a result the voxel is grounded.
+issueFill :: BID -> NearDiff -> Generator Bool
 issueFill bid nd = do
     bot <- getBot bid
     let c' = nearPlus (_pos bot) nd
@@ -129,12 +130,13 @@ issueFill bid nd = do
            modify $ \st -> st {gsFilled = gsFilled st BA.// [(c', True)]}
            updateGrounded c'
   where
-    updateGrounded :: P3 -> Generator ()
+    updateGrounded :: P3 -> Generator Bool
     updateGrounded p@(x,y,z) = do
         filled <- gets gsFilled
         grounded <- gets gsGrounded
         let result = check filled grounded p
         modify $ \st -> st {gsGrounded = gsGrounded st BA.// [(p, result)]}
+        return result
       where
         check _ _ (_,0,_) = True
         check filled grounded p@(x,y,z) =
@@ -160,6 +162,13 @@ willBeGrounded (x,y,z) = do
   let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
                     (x-1, y, z), (x, y-1, z), (x, y, z-1)]
   return $ or [fromMaybe False (grounded BA.!? neighbour) | neighbour <- neighbours]
+
+allAreGrounded :: Generator Bool
+allAreGrounded = do
+  filledMatrix <- gets gsFilled
+  let filledIdxs = [idx | idx <- BA.indices filledMatrix, filledMatrix BA.! idx]
+  grounded <- gets gsGrounded
+  return $ and [grounded BA.! idx | idx <- filledIdxs]
 
 -- | Switch to the next step.
 -- If we did not issue commands for some bots on current steps,
