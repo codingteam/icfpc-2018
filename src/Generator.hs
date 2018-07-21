@@ -182,7 +182,7 @@ test1 = do
   [bid] <- getBids
   issue bid Flip
   step
-  issue bid $ Fill (NearDiff 1 1 1)
+  issue bid $ Fill (NearDiff 0 1 0)
   step
   move bid (5, 0, 5)
   issue bid Halt
