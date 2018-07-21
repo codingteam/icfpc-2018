@@ -30,6 +30,8 @@ dependencies:
 - bitwise
 - containers
 - deriving-compat
+- free
+- lens
 
 library:
   source-dirs: src

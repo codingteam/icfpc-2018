@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Sim (
   BID, Seed, P3,
@@ -12,11 +13,13 @@ module Sim (
   isWellFormedState,
   activeBots,
   isGrounded,
-  enumVoxels
+  enumVoxels,
+  evalSingleBotCmd
 ) where
 
 import Control.Monad.Except
 import Control.Monad.State
+import Control.Lens
 import Data.List (intersect, union, nub) -- yes the horrible O(n²)
 import Data.Word
 
@@ -33,6 +36,7 @@ data BotState = Bot {
   _pos :: P3,
   _seeds :: [Seed]
 } deriving (Show, Eq)
+makeLenses ''BotState
 
 data Harmonics = Low | High deriving (Show, Eq)
 
@@ -49,6 +53,7 @@ data WorldState = NMMS {
   _bots :: [BotState],
   _trace :: [Command]
 }
+makeLenses ''WorldState
 
 -- TODO: lenses could really nicely replace RecordWildCards
 
@@ -106,11 +111,18 @@ class (MonadError SimErr m, MonadState WorldState m) => SimMonad m where
 runSimStack1 :: SimMonadStack1 a -> WorldState -> Either SimErr (a, WorldState)
 runSimStack1 action = runExcept . runStateT action
 
-type BotCmd = (BID, Command)
+type BotCmd = CommandF BID
 
-evalCmd :: SimMonad m => Command -> m ()
-evalCmd (Wait _) = return ()
-evalCmd _ = undefined
+evalSingleBotCmd :: SimMonad m => BotCmd -> m ()
+evalSingleBotCmd (Wait _) = return ()
 
+evalSingleBotCmd (Flip _) = get >>= \world@NMMS{..} -> do
+  when (_harmonics == High && not (isGrounded _matrix)) $
+    throwError "attempt to Flip from High non-grounded state"
+  modify $ over harmonics flip
+  where
+    flip High = Low
+    flip Low = High
 
+evalSingleBotCmd (SMove lld bid) = undefined
 --------------------------------------------------------------------------------
