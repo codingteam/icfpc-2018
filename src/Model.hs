@@ -22,11 +22,14 @@ getVoxel matrix (x,y,z) =
     then Full
     else Void
 
+bits2bytes bits | bits `mod` 8 == 0 = bits `div` 8
+                | otherwise = (bits `div` 8) + 1
+
 instance Binary ModelFile where
   get = do
     resolution <- getWord8
     let r = fromIntegral resolution :: Int
-    let sz = r * r * r `div` 8
+    let sz = bits2bytes $ r * r * r
     bstr <- getByteString sz
     let matrix = fromByteString ((0, 0, 0), (resolution-1, resolution-1, resolution-1)) bstr
     return $ ModelFile resolution matrix
