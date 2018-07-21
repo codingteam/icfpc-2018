@@ -16,6 +16,12 @@ data ModelFile = ModelFile {
     mfMatrix :: BitArray P3
   }
 
+getVoxel :: BitArray P3 -> P3 -> Voxel
+getVoxel matrix (x,y,z) =
+  if matrix ! (x,y,z)
+    then Full
+    else Void
+
 instance Binary ModelFile where
   get = do
     resolution <- getWord8
