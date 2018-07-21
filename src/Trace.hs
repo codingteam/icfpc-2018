@@ -1,4 +1,6 @@
 {-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE DeriveFunctor #-}
+
 module Trace where
 
 import Data.Bits
@@ -28,19 +30,35 @@ data NearDiff = NearDiff Int8 Int8 Int8
 data FarDiff = FarDiff Int8 Int8 Int8
   deriving (Eq, Show)
 
-data Command =
-    Halt
-  | Wait
-  | Flip
-  | SMove LongLinDiff
-  | LMove ShortLinDiff ShortLinDiff
-  | Fission NearDiff Word8
-  | Fill NearDiff
-  | FusionP NearDiff
-  | FusionS NearDiff
-  | GFill NearDiff FarDiff
-  | GVoid NearDiff FarDiff
-  deriving (Eq, Show)
+data CommandF r =
+    Halt r
+  | Wait r
+  | Flip r
+  | SMove LongLinDiff r
+  | LMove ShortLinDiff ShortLinDiff r
+  | Fission NearDiff Word8 r
+  | Fill NearDiff r
+  | FusionP NearDiff r
+  | FusionS NearDiff r
+  | GFill NearDiff FarDiff r
+  | GVoid NearDiff FarDiff r
+  deriving (Eq, Show, Functor)
+
+type Command = CommandF ()
+
+-- smart ctors
+mkHalt, mkWait, mkFlip :: Command
+mkHalt = Halt ()
+mkWait = Wait ()
+mkFlip = Flip ()
+mkSMove d = SMove d ()
+mkLMove d1 d2 = LMove d1 d2 ()
+mkFission d i = Fission d i ()
+mkFill d = Fill d ()
+mkFusionP d = FusionP d ()
+mkFusionS d = FusionS d ()
+mkGFill nd fd = GFill nd fd ()
+mkGVoid nd fd = GVoid nd fd ()
 
 instance Coded Axis where
   encode X = putBit False >> putBit True
@@ -100,62 +118,62 @@ instance Coded FarDiff where
     dy <- getWord8
     dz <- getWord8
     FarDiff
-      <$> pure ((fromIntegral dx)-30)
-      <*> pure ((fromIntegral dy)-30)
-      <*> pure ((fromIntegral dz)-30)
+      <$> pure (fromIntegral dx - 30)
+      <*> pure (fromIntegral dy - 30)
+      <*> pure (fromIntegral dz - 30)
 
-instance Coded Command where
-  encode Halt = putBits 7 0 (0b11111111 :: Word8)
-  encode Wait = putBits 7 0 (0b11111110 :: Word8)
-  encode Flip = putBits 7 0 (0b11111101 :: Word8)
+instance Coded r => Coded (CommandF r) where
+  encode (Halt _) = putBits 7 0 (0b11111111 :: Word8)
+  encode (Wait _) = putBits 7 0 (0b11111110 :: Word8)
+  encode (Flip _) = putBits 7 0 (0b11111101 :: Word8)
 
-  encode (SMove (LongLinDiff a i)) = do
+  encode (SMove (LongLinDiff a i) _) = do
     putBits 1 0 (0b00 :: Int)
     encode a
     putBits 3 0 (0b0100 :: Int)
     putBits 2 0 (0b000 :: Int)
     putBits 4 0 (i+15)
 
-  encode (LMove (ShortLinDiff a1 i1) (ShortLinDiff a2 i2)) = do
+  encode (LMove (ShortLinDiff a1 i1) (ShortLinDiff a2 i2) _) = do
     encode a2
     encode a1
     putBits 3 0 (0b1100 :: Int)
     putBits 3 0 (i2+5)
     putBits 3 0 (i1+5)
 
-  encode (FusionP nd) = do
+  encode (FusionP nd _) = do
     encode nd
     putBits 2 0 (0b111 :: Int)
 
-  encode (FusionS nd) = do
+  encode (FusionS nd _) = do
     encode nd
     putBits 2 0 (0b110 :: Int)
 
-  encode (Fission nd m) = do
+  encode (Fission nd m _) = do
     encode nd
     putBits 2 0 (0b101 :: Int)
     putBits 7 0 m
 
-  encode (Fill nd) = do
+  encode (Fill nd _) = do
     encode nd
     putBits 2 0 (0b011 :: Int)
 
-  encode (GFill nd fd) = do
+  encode (GFill nd fd _) = do
     encode nd
     putBits 2 0 (0b001 :: Int)
     encode fd
 
-  encode (GVoid nd fd) = do
+  encode (GVoid nd fd _) = do
     encode nd
     putBits 2 0 (0b000 :: Int)
     encode fd
 
   decode = parseOpcode =<< getWord8
     where
-      parseOpcode :: MonadGet m => Word8 -> Coding m Command
-      parseOpcode 0b11111111 = pure Halt
-      parseOpcode 0b11111110 = pure Wait
-      parseOpcode 0b11111101 = pure Flip
+      -- parseOpcode :: (MonadGet m, Coded r) => Word8 -> Coding m (CommandF r)
+      parseOpcode 0b11111111 = Halt <$> decode
+      parseOpcode 0b11111110 = Wait <$> decode
+      parseOpcode 0b11111101 = Flip <$> decode
       parseOpcode byte
         | byte .&. 0b11001111 == 0b00000100  = do
           {- SMove -}
@@ -165,7 +183,7 @@ instance Coded Command where
 
           let lld = testDecode [shift lld_a 6 .|. shift lld_i 1]
 
-          return $ SMove lld
+          SMove <$> pure lld <*> decode
 
         | byte .&. 0b1111 == 0b1100  = do
           {- LMove -}
@@ -180,19 +198,19 @@ instance Coded Command where
           let sid1 = testDecode [shift sid1_a 6 .|. shift sid1_i 2]
           let sid2 = testDecode [shift sid2_a 6 .|. shift sid2_i 2]
 
-          return $ LMove sid1 sid2
+          LMove <$> pure sid1 <*> pure sid2 <*> decode
 
         | byte .&. 0b111 == 0b111
-          = FusionP <$> pure (testDecode [byte])
+          = FusionP <$> pure (testDecode [byte]) <*> decode
 
         | byte .&. 0b111 == 0b110
-          = FusionS <$> pure (testDecode [byte])
+          = FusionS <$> pure (testDecode [byte]) <*> decode
 
         | byte .&. 0b111 == 0b101
-          = Fission <$> pure (testDecode [byte]) <*> getBits 7 0 (0 :: Word8)
+          = Fission <$> pure (testDecode [byte]) <*> getBits 7 0 (0 :: Word8) <*> decode
 
         | byte .&. 0b111 == 0b011
-          = Fill <$> pure (testDecode [byte])
+          = Fill <$> pure (testDecode [byte]) <*> decode
 
         | byte .&.0b111 == 0b001 = do
           {- GFill -}
@@ -203,7 +221,7 @@ instance Coded Command where
           dz <- getWord8
           let fd = testDecode [dx, dy, dz]
 
-          return $ GFill nd fd
+          GFill <$> pure nd <*> pure fd <*> decode
 
         | byte .&.0b111 == 0b000 = do
           {- GVoid -}
@@ -214,9 +232,13 @@ instance Coded Command where
           dz <- getWord8
           let fd = testDecode [dx, dy, dz]
 
-          return $ GVoid nd fd
+          GVoid <$> pure nd <*> pure fd <*> decode
 
         | otherwise = error "Command.decode: invalid input"
+
+instance Coded () where
+  encode () = return ()
+  decode = return ()
 
 -- | Converts short linear difference into a long linear difference.
 --
@@ -224,7 +246,6 @@ instance Coded Command where
 -- mlen(ld) ≤ 5, which also satisfies LongLinDiff's predicate of mlen(ld) ≤ 15.
 fromShortLinDiff :: ShortLinDiff -> LongLinDiff
 fromShortLinDiff (ShortLinDiff axis diff) = LongLinDiff axis diff
-
 encodeL :: Coded a => a -> L.ByteString
 encodeL x = runPutL . runEncode $ encode x >> flush
 

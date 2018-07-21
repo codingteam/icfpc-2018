@@ -6,4 +6,4 @@ import Sim
 
 
 dummyTraceGen :: (BitArray P3) -> [Command]
-dummyTraceGen matrix = [Halt]
+dummyTraceGen matrix = [mkHalt]

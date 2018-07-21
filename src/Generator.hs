@@ -181,22 +181,22 @@ step = do
     let updates = mapMaybe update (indices traces)
         update bid = let trace = traces ! bid
                      in  if length trace < n'
-                           then Just (bid, trace |> Wait)
+                           then Just (bid, trace |> mkWait)
                            else Nothing
     let traces' = traces // updates
     modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
 
 subtractCmd :: P3d -> Command -> P3d
-subtractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1)) = (dx-(fromIntegral dx1), dy, dz)
-subtractCmd (dx, dy, dz) (SMove (LongLinDiff Y dy1)) = (dx, dy-(fromIntegral dy1), dz)
-subtractCmd (dx, dy, dz) (SMove (LongLinDiff Z dz1)) = (dx, dy, dz-(fromIntegral dz1))
-subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff X dx2)) = (dx-(fromIntegral dx1)-(fromIntegral dx2), dy, dz)
-subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Y dy2)) = (dx, dy-(fromIntegral dy1)-(fromIntegral dy2), dz)
-subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Z dz1) (ShortLinDiff Z dz2)) = (dx, dy, dz-(fromIntegral dz1)-(fromIntegral dz2))
-subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Y dy2)) = (dx-(fromIntegral dx1), dy-(fromIntegral dy2), dz)
-subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Z dz2)) = (dx-(fromIntegral dx1), dy, dz-(fromIntegral dz2))
-subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Z dz2)) = (dx, dy-(fromIntegral dy1), dz-(fromIntegral dz2))
-subtractCmd p (LMove sld1 sld2) = subtractCmd p (LMove sld2 sld1)
+subtractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1) _) = (dx-(fromIntegral dx1), dy, dz)
+subtractCmd (dx, dy, dz) (SMove (LongLinDiff Y dy1) _) = (dx, dy-(fromIntegral dy1), dz)
+subtractCmd (dx, dy, dz) (SMove (LongLinDiff Z dz1) _) = (dx, dy, dz-(fromIntegral dz1))
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff X dx2) _) = (dx-(fromIntegral dx1)-(fromIntegral dx2), dy, dz)
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Y dy2) _) = (dx, dy-(fromIntegral dy1)-(fromIntegral dy2), dz)
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Z dz1) (ShortLinDiff Z dz2) _) = (dx, dy, dz-(fromIntegral dz1)-(fromIntegral dz2))
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Y dy2) _) = (dx-(fromIntegral dx1), dy-(fromIntegral dy2), dz)
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Z dz2) _) = (dx-(fromIntegral dx1), dy, dz-(fromIntegral dz2))
+subtractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Z dz2) _) = (dx, dy-(fromIntegral dy1), dz-(fromIntegral dz2))
+subtractCmd p (LMove sld1 sld2 _) = subtractCmd p (mkLMove sld2 sld1)
 subtractCmd _ c = error $ "Impossible move command: " ++ show c
 
 origin :: P3
@@ -214,27 +214,27 @@ extractMove p@(dx, dy, dz) =
       clamp15 = clamp (-15, 15)
   in case (dx /= 0, dy /= 0, dz /= 0) of
     (True, True, False) ->
-      let cmd = LMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Y (fromIntegral $ clamp5 dy))
+      let cmd = mkLMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Y (fromIntegral $ clamp5 dy))
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (True, False, True) ->
-      let cmd = LMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Z (fromIntegral $ clamp5 dz))
+      let cmd = mkLMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Z (fromIntegral $ clamp5 dz))
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, True, True) ->
-      let cmd = LMove (ShortLinDiff Y (fromIntegral $ clamp5 dy)) (ShortLinDiff Z (fromIntegral $ clamp5 dz))
+      let cmd = mkLMove (ShortLinDiff Y (fromIntegral $ clamp5 dy)) (ShortLinDiff Z (fromIntegral $ clamp5 dz))
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (True, False, False) ->
-      let cmd = SMove (LongLinDiff X $ fromIntegral $ clamp15 dx)
+      let cmd = mkSMove (LongLinDiff X $ fromIntegral $ clamp15 dx)
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, True, False) ->
-      let cmd = SMove (LongLinDiff Y $ fromIntegral $ clamp15 dy)
+      let cmd = mkSMove (LongLinDiff Y $ fromIntegral $ clamp15 dy)
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, False, True) ->
-      let cmd = SMove (LongLinDiff Z $ fromIntegral $ clamp15 dz)
+      let cmd = mkSMove (LongLinDiff Z $ fromIntegral $ clamp15 dz)
           res = subtractCmd p cmd
       in  Right (cmd, res)
     _ -> Left p
@@ -301,17 +301,16 @@ makeTrace model gen =
       botCommand step trace =
         if step < length trace
           then trace `Seq.index` step
-          else Wait
+          else mkWait
   in  concatMap botsCommandsAtStep [0 .. maxLen-1]
 
 test1 :: Generator ()
 test1 = do
   [bid] <- getBids
-  issue bid Flip
+  issue bid mkFlip
   step
-  issue bid $ Fill (NearDiff 0 1 0)
+  issue bid $ mkFill (NearDiff 0 1 0)
   step
   move bid (5, 0, 5)
-  issue bid Halt
+  issue bid mkHalt
   step
-

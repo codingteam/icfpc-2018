@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Sim (
   BID, Seed, P3,
@@ -14,12 +15,14 @@ module Sim (
   enumVoxels
 ) where
 
+import Control.Monad.Except
+import Control.Monad.State
 import Data.List (intersect, union, nub) -- yes the horrible O(n²)
 import Data.Word
 
 -- TODO: write SimFast.hs using efficient representations
 
-import Trace (Command(..))
+import Trace (Command, CommandF(..))
 
 type BID = Word8
 type Seed = Word8
@@ -93,3 +96,21 @@ enumVoxels (Matrix (res, matF))
 
 isGrounded :: Matrix -> Bool
 isGrounded = undefined
+
+--------------------------------------------------------------------------------
+type SimErr = String
+type SimMonadStack1 = StateT WorldState (Except SimErr)
+
+class (MonadError SimErr m, MonadState WorldState m) => SimMonad m where
+
+runSimStack1 :: SimMonadStack1 a -> WorldState -> Either SimErr (a, WorldState)
+runSimStack1 action = runExcept . runStateT action
+
+type BotCmd = (BID, Command)
+
+evalCmd :: SimMonad m => Command -> m ()
+evalCmd (Wait _) = return ()
+evalCmd _ = undefined
+
+
+--------------------------------------------------------------------------------
