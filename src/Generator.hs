@@ -5,9 +5,11 @@ import Control.Monad
 import Control.Monad.State
 import Data.Maybe
 import Data.Array
+import qualified Data.Array.BitArray as BA
 
 import Trace
 import Sim
+import Model
 
 {-
  - We may have several bots, and commands to these bots are to be issued sort of "in parallel":
@@ -27,8 +29,8 @@ type Step = Int
 
 type AliveBot = BID
 
--- TODO: put Model here.
 data GeneratorState = GS {
+    gsModel :: ModelFile,
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
     gsBots :: [BotState],
@@ -39,8 +41,8 @@ data GeneratorState = GS {
 maxBID :: BID
 maxBID = 20
 
-initState :: GeneratorState
-initState = GS 0 [(0,[bid])] [bot] traces
+initState :: ModelFile -> GeneratorState
+initState model = GS model 0 [(0,[bid])] [bot] traces
   where
     bid = 0
     bot = Bot bid (0,0,0) []
@@ -164,9 +166,14 @@ move bid newPos@(nx, ny, nz) = do
       issue bid cmd
       step
 
-makeTrace :: Generator a -> [Command]
-makeTrace gen =
-  let st = execState gen initState
+isFree :: P3 -> Generator Bool
+isFree p = do
+  matrix <- gets (mfMatrix . gsModel)
+  return $ matrix BA.! p
+
+makeTrace :: ModelFile -> Generator a -> [Command]
+makeTrace model gen =
+  let st = execState gen (initState model)
       traces = gsTraces st
       maxLen = maximum $ map length $ elems traces
       botsAliveAtStep step = last [bots | (s, bots) <- gsAliveBots st, s <= step]
