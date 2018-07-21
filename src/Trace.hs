@@ -15,13 +15,13 @@ import Text.Printf
 data Axis = X | Y | Z
   deriving (Eq, Show, Enum)
 
-data ShortLinDiff = ShortLinDiff Axis Word8
+data ShortLinDiff = ShortLinDiff Axis Int
   deriving (Eq, Show)
 
-data LongLinDiff = LongLinDiff Axis Word8
+data LongLinDiff = LongLinDiff Axis Int
   deriving (Eq, Show)
 
-data NearDiff = NearDiff Word8 Word8 Word8
+data NearDiff = NearDiff Int Int Int
   deriving (Eq, Show)
 
 data Command =

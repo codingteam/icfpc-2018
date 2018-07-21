@@ -31,22 +31,24 @@ type AliveBot = BID
 
 data GeneratorState = GS {
     gsModel :: ModelFile,
+    gsFilled :: BA.BitArray P3,
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
-    gsBots :: [BotState],
+    gsBots :: Array BID BotState,
     gsTraces :: Array BID BotTrace -- Trace is to be filled with Wait if bot does nothing or is not alive.
   }
-  deriving (Show)
 
 maxBID :: BID
 maxBID = 20
 
 initState :: ModelFile -> GeneratorState
-initState model = GS model 0 [(0,[bid])] [bot] traces
+initState model = GS model filled 0 [(0,[bid])] bots traces
   where
     bid = 0
-    bot = Bot bid (0,0,0) []
+    bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) []) | bid <- [0 .. maxBID]]
     traces = array (0, maxBID) [(bid, []) | bid <- [0 .. maxBID]]
+    r = mfResolution model
+    filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
 
 type Generator a = State GeneratorState a
 
@@ -58,22 +60,18 @@ getBotTrace bid = do
 -- Check that there is such bot
 checkBid :: BID -> Generator ()
 checkBid bid = do
-  bots <- gets gsBots
-  when (bid `notElem` map _bid bots) $
-      fail $ "There is currently no such bot: " ++ show bid ++ "\nCurrent bots are:\n" ++ show bots
+  bids <- gets (indices . gsBots)
+  when (bid `notElem` bids) $
+      fail $ "There is currently no such bot: " ++ show bid ++ "\nCurrent bots are:\n" ++ show bids
 
 getBids :: Generator [BID]
 getBids = do
-  bots <- gets gsBots
-  return $ map _bid bots
+  gets (indices . gsBots)
 
 getBot :: BID -> Generator BotState
 getBot bid = do
   bots <- gets gsBots
-  let good = [bot | bot <- bots, _bid bot == bid]
-  if null good
-    then fail $ "No such bot: " ++ show bid
-    else return $ head good
+  return $ bots ! bid
 
 -- | Issue one command for one bot.
 issue :: BID -> Command -> Generator ()
@@ -99,7 +97,9 @@ step = do
     let traces' = traces // updates
     modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
 
-substractCmd :: P3 -> Command -> P3
+type I3 = (Int,Int,Int)
+
+substractCmd :: I3 -> Command -> I3
 substractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1)) = (dx-dx1, dy, dz)
 substractCmd (dx, dy, dz) (SMove (LongLinDiff Y dy1)) = (dx, dy-dy1, dz)
 substractCmd (dx, dy, dz) (SMove (LongLinDiff Z dz1)) = (dx, dy, dz-dz1)
@@ -115,7 +115,7 @@ substractCmd _ c = error $ "Impossible move command: " ++ show c
 origin :: P3
 origin = (0,0,0)
 
-extractMove :: P3 -> Either P3 (Command, P3)
+extractMove :: I3 -> Either I3 (Command, I3)
 extractMove p@(dx, dy, dz) =
   case (dx /= 0, dy /= 0, dz /= 0) of
     (True, True, False) ->
@@ -146,11 +146,11 @@ extractMove p@(dx, dy, dz) =
     
 -- | NOTE: This does not check if all intermediate voxels are free!
 -- We will need more clever algorithm.
-moveCommands :: P3 -> [Command]
+moveCommands :: I3 -> [Command]
 moveCommands (0,0,0) = []
 moveCommands p =
   case extractMove p of
-    Left p' -> if p' == origin
+    Left p' -> if p' == (0,0,0)
                  then []
                  else error $ "Cannot do such move: " ++ show p'
     Right (cmd, p') -> cmd : moveCommands p'
@@ -160,14 +160,21 @@ move :: BID -> P3 -> Generator ()
 move bid newPos@(nx, ny, nz) = do  
   bot <- getBot bid
   let pos@(x,y,z) = _pos bot
-      diff = (nx-x, ny-y, nz-z)
+      diff = (fromIntegral nx - fromIntegral x, fromIntegral ny - fromIntegral y, fromIntegral nz - fromIntegral z)
       commands = moveCommands diff
   forM_ commands $ \cmd -> do
       issue bid cmd
       step
+  let bot' = bot {_pos = newPos}
+  modify $ \st -> st {gsBots = gsBots st // [(bid, bot')]}
 
-isFree :: P3 -> Generator Bool
-isFree p = do
+isFreeInModel :: P3 -> Generator Bool
+isFreeInModel p = do
+  matrix <- gets (mfMatrix . gsModel)
+  return $ not $ matrix BA.! p
+
+isFilledInModel :: P3 -> Generator Bool
+isFilledInModel p = do
   matrix <- gets (mfMatrix . gsModel)
   return $ matrix BA.! p
 
