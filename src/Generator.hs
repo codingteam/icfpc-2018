@@ -27,6 +27,7 @@ type Step = Int
 
 type AliveBot = BID
 
+-- TODO: put Model here.
 data GeneratorState = GS {
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
@@ -64,6 +65,14 @@ getBids = do
   bots <- gets gsBots
   return $ map _bid bots
 
+getBot :: BID -> Generator BotState
+getBot bid = do
+  bots <- gets gsBots
+  let good = [bot | bot <- bots, _bid bot == bid]
+  if null good
+    then fail $ "No such bot: " ++ show bid
+    else return $ head good
+
 -- | Issue one command for one bot.
 issue :: BID -> Command -> Generator ()
 issue bid cmd = do
@@ -72,6 +81,9 @@ issue bid cmd = do
   let trace' = trace ++ [cmd]
   modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
 
+-- | Switch to the next step.
+-- If we did not issue commands for some bots on current steps,
+-- automatically issue Wait command for them.
 step :: Generator ()
 step = do
     n <- gets gsStepNumber
@@ -85,7 +97,72 @@ step = do
     let traces' = traces // updates
     modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
 
--- move :: P3 -> Generator ()
+substractCmd :: P3 -> Command -> P3
+substractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1)) = (dx-dx1, dy, dz)
+substractCmd (dx, dy, dz) (SMove (LongLinDiff Y dy1)) = (dx, dy-dy1, dz)
+substractCmd (dx, dy, dz) (SMove (LongLinDiff Z dz1)) = (dx, dy, dz-dz1)
+substractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff X dx2)) = (dx-dx1-dx2, dy, dz)
+substractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Y dy2)) = (dx, dy-dy1-dy2, dz)
+substractCmd (dx, dy, dz) (LMove (ShortLinDiff Z dz1) (ShortLinDiff Z dz2)) = (dx, dy, dz-dz1-dz2)
+substractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Y dy2)) = (dx-dx1, dy-dy2, dz)
+substractCmd (dx, dy, dz) (LMove (ShortLinDiff X dx1) (ShortLinDiff Z dz2)) = (dx-dx1, dy, dz-dz2)
+substractCmd (dx, dy, dz) (LMove (ShortLinDiff Y dy1) (ShortLinDiff Z dz2)) = (dx, dy-dy1, dz-dz2)
+substractCmd p (LMove sld1 sld2) = substractCmd p (LMove sld2 sld1)
+substractCmd _ c = error $ "Impossible move command: " ++ show c
+
+origin :: P3
+origin = (0,0,0)
+
+extractMove :: P3 -> Either P3 (Command, P3)
+extractMove p@(dx, dy, dz) =
+  case (dx /= 0, dy /= 0, dz /= 0) of
+    (True, True, False) ->
+      let cmd = LMove (ShortLinDiff X (min dx 5)) (ShortLinDiff Y (min dy 5))
+          res = substractCmd p cmd
+      in  Right (cmd, res)
+    (True, False, True) ->
+      let cmd = LMove (ShortLinDiff X (min dx 5)) (ShortLinDiff Z (min dz 5))
+          res = substractCmd p cmd
+      in  Right (cmd, res)
+    (False, True, True) ->
+      let cmd = LMove (ShortLinDiff Y (min dy 5)) (ShortLinDiff Z (min dz 5))
+          res = substractCmd p cmd
+      in  Right (cmd, res)
+    (True, False, False) ->
+      let cmd = SMove (LongLinDiff X $ min dx 15)
+          res = substractCmd p cmd
+      in  Right (cmd, res)
+    (False, True, False) ->
+      let cmd = SMove (LongLinDiff Y $ min dy 15)
+          res = substractCmd p cmd
+      in  Right (cmd, res)
+    (False, False, True) ->
+      let cmd = SMove (LongLinDiff Z $ min dz 15)
+          res = substractCmd p cmd
+      in  Right (cmd, res)
+    _ -> Left p
+    
+-- | NOTE: This does not check if all intermediate voxels are free!
+-- We will need more clever algorithm.
+moveCommands :: P3 -> [Command]
+moveCommands (0,0,0) = []
+moveCommands p =
+  case extractMove p of
+    Left p' -> if p' == origin
+                 then []
+                 else error $ "Cannot do such move: " ++ show p'
+    Right (cmd, p') -> cmd : moveCommands p'
+
+-- | Move one bot in series of steps
+move :: BID -> P3 -> Generator ()
+move bid newPos@(nx, ny, nz) = do  
+  bot <- getBot bid
+  let pos@(x,y,z) = _pos bot
+      diff = (nx-x, ny-y, nz-z)
+      commands = moveCommands diff
+  forM_ commands $ \cmd -> do
+      issue bid cmd
+      step
 
 makeTrace :: Generator a -> [Command]
 makeTrace gen =
@@ -107,6 +184,7 @@ test1 = do
   step
   issue bid $ Fill (NearDiff 1 1 1)
   step
+  move bid (5, 0, 5)
   issue bid Halt
   step
 
