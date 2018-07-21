@@ -125,6 +125,7 @@ clamp (low, high) value
 extractMove :: P3d -> Either P3d (Command, P3d)
 extractMove p@(dx, dy, dz) =
   let clamp5 = clamp (-5, 5)
+      clamp15 = clamp (-15, 15)
   in case (dx /= 0, dy /= 0, dz /= 0) of
     (True, True, False) ->
       let cmd = LMove (ShortLinDiff X (fromIntegral $ clamp5 dx)) (ShortLinDiff Y (fromIntegral $ clamp5 dy))
@@ -139,15 +140,15 @@ extractMove p@(dx, dy, dz) =
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (True, False, False) ->
-      let cmd = SMove (LongLinDiff X $ fromIntegral $ clamp5 dx)
+      let cmd = SMove (LongLinDiff X $ fromIntegral $ clamp15 dx)
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, True, False) ->
-      let cmd = SMove (LongLinDiff Y $ fromIntegral $ clamp5 dy)
+      let cmd = SMove (LongLinDiff Y $ fromIntegral $ clamp15 dy)
           res = subtractCmd p cmd
       in  Right (cmd, res)
     (False, False, True) ->
-      let cmd = SMove (LongLinDiff Z $ fromIntegral $ clamp5 dz)
+      let cmd = SMove (LongLinDiff Z $ fromIntegral $ clamp15 dz)
           res = subtractCmd p cmd
       in  Right (cmd, res)
     _ -> Left p
