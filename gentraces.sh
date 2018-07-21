@@ -52,7 +52,7 @@ do_zip(){
 
 do_run(){
 	MDL="$1"
-	NBT="${MDL%mdl}nbt"
+	NBT="${MDL%_tgt.mdl}.nbt"
 	echo "exec: $TMP_IN_DIR/$MDL -> $TMP_OUT_DIR/$NBT"
 	stack exec "$EXEC" -- "$COMMAND" "$TMP_IN_DIR/$MDL" "$TMP_OUT_DIR/$NBT"
 }
