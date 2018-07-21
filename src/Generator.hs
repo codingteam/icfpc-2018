@@ -39,7 +39,9 @@ type P3d = (Int16, Int16, Int16)
 
 data GeneratorState = GS {
     gsModel :: ModelFile,
-    gsFilled :: BA.BitArray P3,
+    gsHarmonics :: Harmonics,
+    gsFilled :: BA.BitArray P3, -- voxels that are already filled by generator
+    gsGrounded :: BA.BitArray P3, -- grounded voxels
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
     gsBots :: Array BID BotState,
@@ -50,13 +52,14 @@ maxBID :: BID
 maxBID = 20
 
 initState :: ModelFile -> GeneratorState
-initState model = GS model filled 0 [(0,[bid])] bots traces
+initState model = GS model Low filled grounded 0 [(0,[bid])] bots traces
   where
     bid = 0
     bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) []) | bid <- [0 .. maxBID]]
     traces = array (0, maxBID) [(bid, Seq.empty) | bid <- [0 .. maxBID]]
     r = mfResolution model
     filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
+    grounded = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
 
 type Generator a = State GeneratorState a
 
@@ -89,6 +92,23 @@ issue bid cmd = do
   let trace' = trace |> cmd
   modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
 
+flipH :: Harmonics -> Harmonics
+flipH Low = High
+flipH High = Low
+
+-- | Issue Flip command and remember resulting harmonics.
+issueFlip :: BID -> Generator ()
+issueFlip bid = do
+  modify $ \st -> st {gsHarmonics = flipH (gsHarmonics st)}
+  issue bid Flip
+
+-- | Set harmonics to target value
+setHarmonics :: BID -> Harmonics -> Generator ()
+setHarmonics bid target = do
+  current <- gets gsHarmonics
+  when (current /= target) $
+      issueFlip bid
+
 nearPlus :: P3 -> NearDiff -> P3
 nearPlus (x,y,z) (NearDiff dx dy dz) = (x+fromIntegral dx, y+fromIntegral dy, z+fromIntegral dz)
 
@@ -99,12 +119,47 @@ negateNear (NearDiff dx dy dz) = NearDiff (-dx) (-dy) (-dz)
 -- This will mark the voxel as filled in generator's state
 issueFill :: BID -> NearDiff -> Generator ()
 issueFill bid nd = do
-  bot <- getBot bid
-  let c' = nearPlus (_pos bot) nd
-  filled <- isFilled c'
-  if filled
-    then fail $ "Voxel is already filled: " ++ show c'
-    else issue bid $ Fill nd
+    bot <- getBot bid
+    let c' = nearPlus (_pos bot) nd
+    filled <- isFilled c'
+    if filled
+      then fail $ "Voxel is already filled: " ++ show c'
+      else do
+           issue bid $ Fill nd
+           modify $ \st -> st {gsFilled = gsFilled st BA.// [(c', True)]}
+           updateGrounded c'
+  where
+    updateGrounded :: P3 -> Generator ()
+    updateGrounded p@(x,y,z) = do
+        filled <- gets gsFilled
+        grounded <- gets gsGrounded
+        let result = check filled grounded p
+        modify $ \st -> st {gsGrounded = gsGrounded st BA.// [(p, result)]}
+      where
+        check _ _ (_,0,_) = True
+        check filled grounded p@(x,y,z) =
+          if filled BA.! p
+            then
+              let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
+                                (x-1, y, z), (x, y-1, z), (x, y, z-1)]
+              in  or [grounded BA.! neighbour | neighbour <- neighbours]
+            else False
+
+-- | Is voxel grounded?
+-- This works by definition, i.e. always returns False for non-filled voxels.
+isGrounded :: P3 -> Generator Bool
+isGrounded p = do
+  grounded <- gets gsGrounded
+  return $ grounded BA.! p
+
+-- | Will voxel become grounded if we fill it?
+-- This checks if any neighbour voxel is grounded.
+willBeGrounded :: P3 -> Generator Bool
+willBeGrounded (x,y,z) = do
+  grounded <- gets gsGrounded
+  let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
+                    (x-1, y, z), (x, y-1, z), (x, y, z-1)]
+  return $ or [fromMaybe False (grounded BA.!? neighbour) | neighbour <- neighbours]
 
 -- | Switch to the next step.
 -- If we did not issue commands for some bots on current steps,
