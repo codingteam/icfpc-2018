@@ -20,3 +20,13 @@ splitLMove [] = []
 splitLMove ((LMove a b):Wait:cmds) =
   (SMove (fromShortLinDiff a)) : (SMove (fromShortLinDiff b)) : cmds
 splitLMove (cmd:cmds) = cmd : (splitLMove cmds)
+
+-- | Turns [SMove a, SMove b] into [SMove x] if a and b are on the same axis
+-- and can be combined.
+mergeSMoves :: [Command] -> [Command]
+mergeSMoves [] = []
+mergeSMoves (m1@(SMove (LongLinDiff a1 d1)):m2@(SMove (LongLinDiff a2 d2)):cmds)
+  | (a1 /= a2) || (d1 + d2 < -15) || (d1 + d2 > 15)
+      = m1 : (mergeSMoves (m2:cmds))
+  | otherwise = (SMove (LongLinDiff a1 (d1 + d2))) : cmds
+mergeSMoves (cmd:cmds) = cmd : (mergeSMoves cmds)
