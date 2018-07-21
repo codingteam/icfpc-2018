@@ -4,9 +4,31 @@
 -- version.  It's up to you to figure out if the result is better than the
 -- input, and if you should re-run optimizations to find new occurrences of
 -- patterns.
+--
+-- WARNING: For now, these functions assume that there is only one nanobot!
 module Optimizations where
 
+import Control.Monad (forM)
+
 import Trace
+
+import Debug.Trace
+
+-- | Returns all possible optimizations of a given command sequence.
+optimize :: [Command] -> [[Command]]
+optimize [] = []
+optimize cmds = go [cmds] [cmds]
+  where
+  go :: [[Command]] -> [[Command]] -> [[Command]]
+  go [] optimized = optimized
+  go (t:stack) optimized =
+    let
+      new = map (\f -> f t) optimizers
+      new' = filter (/= t) new
+    in go (new' ++ stack) (new' ++ optimized)
+
+  optimizers :: [[Command] -> [Command]]
+  optimizers = [splitLMove, mergeSMoves]
 
 -- | Turns [LMove a b, Wait] into [SMove a, SMove b]
 --
