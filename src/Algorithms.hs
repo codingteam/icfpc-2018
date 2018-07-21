@@ -93,3 +93,16 @@ runTest2 path gen = do
   print trace
   writeTrace "test2.nbt" trace
 
+dumbHighSolver :: FilePath -> FilePath -> IO ()
+dumbHighSolver modelPath tracePath = do
+  model <- decodeFile modelPath
+  let trace = makeTrace model $ do
+                let bid = 0
+                issue bid Flip
+                dumbFill bid
+                move bid (0,0,0)
+                issue bid Flip
+                issue bid Halt
+  print trace
+  writeTrace tracePath trace
+

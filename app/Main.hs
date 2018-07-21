@@ -5,6 +5,7 @@ import System.Environment
 import Trace
 import Model
 import Generator
+import Algorithms
 import TraceGens
 import Sim
 import Data.Array.BitArray
@@ -22,4 +23,5 @@ main = do
   case args of
     ["display", file] -> displayModelFile file
     ["gentrace-dummy", infile, outfile] -> gentrace dummyTraceGen infile outfile
+    ["dumb", infile, outfile] -> dumbHighSolver infile outfile
     _ -> fail "unknown command"
