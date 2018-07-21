@@ -1,7 +1,13 @@
 module Main where
 
-import Lib
+import System.Environment
+
 import Trace
+import Model
 
 main :: IO ()
-main = someFunc
+main = do
+  [cmd, file] <- getArgs
+  case cmd of
+    "display" -> displayModelFile file
+    _ -> fail "unknown command"

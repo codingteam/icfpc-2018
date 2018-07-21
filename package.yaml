@@ -25,6 +25,7 @@ dependencies:
 - bytes
 - binary
 - bytestring
+- bitwise
 
 library:
   source-dirs: src

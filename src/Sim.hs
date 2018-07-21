@@ -15,14 +15,15 @@ module Sim (
 ) where
 
 import Data.List (intersect, union, nub) -- yes the horrible O(n²)
+import Data.Word
 
 -- TODO: write SimFast.hs using efficient representations
 
 import Trace (Command(..))
 
-type BID = Int
-type Seed = Int
-type P3 = (Int, Int, Int)
+type BID = Word8
+type Seed = Word8
+type P3 = (Word8, Word8, Word8)
 
 data BotState = Bot {
   _bid :: BID,
@@ -32,7 +33,7 @@ data BotState = Bot {
 
 data Harmonics = Low | High deriving (Show, Eq)
 
-type Resolution = Int
+type Resolution = Word8
 
 data Voxel = Void | Full deriving (Show, Eq)
 
