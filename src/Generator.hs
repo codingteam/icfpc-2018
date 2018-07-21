@@ -85,6 +85,23 @@ issue bid cmd = do
   let trace' = trace ++ [cmd]
   modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
 
+nearPlus :: P3 -> NearDiff -> P3
+nearPlus (x,y,z) (NearDiff dx dy dz) = (x+fromIntegral dx, y+fromIntegral dy, z+fromIntegral dz)
+
+negateNear :: NearDiff -> NearDiff
+negateNear (NearDiff dx dy dz) = NearDiff (-dx) (-dy) (-dz)
+
+-- | Issue the Fill command
+-- This will mark the voxel as filled in generator's state
+issueFill :: BID -> NearDiff -> Generator ()
+issueFill bid nd = do
+  bot <- getBot bid
+  let c' = nearPlus (_pos bot) nd
+  filled <- isFilled c'
+  if filled
+    then fail $ "Voxel is already filled: " ++ show c'
+    else issue bid $ Fill nd
+
 -- | Switch to the next step.
 -- If we did not issue commands for some bots on current steps,
 -- automatically issue Wait command for them.
@@ -118,9 +135,7 @@ origin :: P3
 origin = (0,0,0)
 
 clamp :: Ord a => (a,  a) -> a -> a
-clamp (low, high) value
-  | value >= low && value <= high = max low (min value high)
-  | otherwise = error "clamp: value is outside of clamping range"
+clamp (low, high) value = max low (min value high)
 
 extractMove :: P3d -> Either P3d (Command, P3d)
 extractMove p@(dx, dy, dz) =
@@ -186,6 +201,18 @@ isFreeInModel p = do
 isFilledInModel :: P3 -> Generator Bool
 isFilledInModel p = do
   matrix <- gets (mfMatrix . gsModel)
+  return $ matrix BA.! p
+
+-- | Returns True if voxel was not filled by generator yet
+isFree :: P3 -> Generator Bool
+isFree p = do
+  matrix <- gets gsFilled
+  return $ not $ matrix BA.! p
+
+-- | Returns True if voxel is already filled by the generator
+isFilled :: P3 -> Generator Bool
+isFilled p = do
+  matrix <- gets gsFilled
   return $ matrix BA.! p
 
 makeTrace :: ModelFile -> Generator a -> [Command]
