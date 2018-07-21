@@ -16,6 +16,11 @@ data ModelFile = ModelFile {
     mfMatrix :: BitArray P3
   }
 
+instance Show ModelFile where
+  show model =
+    let res = show (mfResolution model)
+    in concat ["ModelFile ", res, "³"]
+
 getVoxel :: BitArray P3 -> P3 -> Voxel
 getVoxel matrix (x,y,z) =
   if matrix ! (x,y,z)
