@@ -8,6 +8,8 @@ import Data.Array
 import Data.Int
 import Data.List
 import Data.Ord
+import qualified Data.Sequence as Seq
+import Data.Sequence ((|>))
 import qualified Data.Array.BitArray as BA
 
 import Trace
@@ -26,7 +28,7 @@ import Model
  - Number of bots can also be decreased sometimes.
  -}
 
-type BotTrace = [Command]
+type BotTrace = Seq.Seq Command
 
 type Step = Int
 
@@ -52,7 +54,7 @@ initState model = GS model filled 0 [(0,[bid])] bots traces
   where
     bid = 0
     bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) []) | bid <- [0 .. maxBID]]
-    traces = array (0, maxBID) [(bid, []) | bid <- [0 .. maxBID]]
+    traces = array (0, maxBID) [(bid, Seq.empty) | bid <- [0 .. maxBID]]
     r = mfResolution model
     filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
 
@@ -84,7 +86,7 @@ issue :: BID -> Command -> Generator ()
 issue bid cmd = do
   checkBid bid
   trace <- getBotTrace bid
-  let trace' = trace ++ [cmd]
+  let trace' = trace |> cmd
   modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
 
 nearPlus :: P3 -> NearDiff -> P3
@@ -115,7 +117,7 @@ step = do
     let updates = mapMaybe update (indices traces)
         update bid = let trace = traces ! bid
                      in  if length trace < n'
-                           then Just (bid, trace ++ [Wait])
+                           then Just (bid, trace |> Wait)
                            else Nothing
     let traces' = traces // updates
     modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
@@ -234,7 +236,7 @@ makeTrace model gen =
       botsCommandsAtStep step = map (botCommand step) [traces ! bid | bid <- botsAliveAtStep step]
       botCommand step trace =
         if step < length trace
-          then trace !! step
+          then trace `Seq.index` step
           else Wait
   in  concatMap botsCommandsAtStep [0 .. maxLen-1]
 

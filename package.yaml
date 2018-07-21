@@ -28,6 +28,7 @@ dependencies:
 - binary
 - bytestring
 - bitwise
+- containers
 
 library:
   source-dirs: src
