@@ -8,3 +8,4 @@ icfpc2018.cabal
 /.idea/
 /out/
 /privatekey
+cabal.config

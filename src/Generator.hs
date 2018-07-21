@@ -47,6 +47,7 @@ data GeneratorState = GS {
     gsBots :: Array BID BotState,
     gsTraces :: Array BID BotTrace -- Trace is to be filled with Wait if bot does nothing or is not alive.
   }
+  deriving (Eq, Show)
 
 maxBID :: BID
 maxBID = 20
@@ -101,6 +102,11 @@ issueFlip :: BID -> Generator ()
 issueFlip bid = do
   modify $ \st -> st {gsHarmonics = flipH (gsHarmonics st)}
   issue bid Flip
+
+-- | Issue Fission command forking a new bot taking N seeds with him from the current bot.
+issueFission :: BID -> Int -> NearDiff -> Generator ()
+issueFission bid n direction = do
+  modify $ \st -> st
 
 -- | Set harmonics to target value
 setHarmonics :: BID -> Harmonics -> Generator ()
