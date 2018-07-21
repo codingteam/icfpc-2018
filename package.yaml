@@ -29,6 +29,7 @@ dependencies:
 - bytestring
 - bitwise
 - containers
+- deriving-compat
 
 library:
   source-dirs: src

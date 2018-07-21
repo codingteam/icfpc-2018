@@ -1,5 +1,6 @@
 {-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Trace where
 
@@ -10,10 +11,14 @@ import Data.Bits.Coded
 import Data.Bits.Coding
 import Data.Binary.Get (Get)
 import Data.Binary.Put (PutM)
+import Control.Monad.Free
+import Data.Foldable
+import Data.Functor.Classes
 import Data.Int
 import qualified Data.ByteString.Lazy as L
 import Data.Word
 import Text.Printf
+import Text.Show.Deriving
 
 data Axis = X | Y | Z
   deriving (Eq, Show, Enum)
@@ -30,6 +35,14 @@ data NearDiff = NearDiff Int8 Int8 Int8
 data FarDiff = FarDiff Int8 Int8 Int8
   deriving (Eq, Show)
 
+-- | CommandF is a Functor.
+-- It can contain various stuff:
+--  * executing bot ID
+--  * global timestep index
+--  * volatile cells of it
+--  * energy cost
+--  * a tail of following (or preceding) commands
+-- etc.
 data CommandF r =
     Halt r
   | Wait r
@@ -44,6 +57,10 @@ data CommandF r =
   | GVoid NearDiff FarDiff r
   deriving (Eq, Show, Functor)
 
+-- | derive Show1 instance via TH
+$(deriveShow1 ''CommandF)
+
+-- | Of course CommandF can also contain nothing, (), besides the command itself
 type Command = CommandF ()
 
 -- smart ctors
@@ -59,6 +76,29 @@ mkFusionP d = FusionP d ()
 mkFusionS d = FusionS d ()
 mkGFill nd fd = GFill nd fd ()
 mkGVoid nd fd = GVoid nd fd ()
+
+extract :: CommandF a -> a
+extract (Halt r) = r
+extract (Wait r) = r
+extract (Flip r) = r
+extract (SMove _ r) = r
+extract (LMove _ _ r) = r
+extract (Fission _ _ r) = r
+extract (Fill _ r) = r
+extract (FusionP _ r) = r
+extract (FusionS _ r) = r
+
+type CommandSeq = Free CommandF ()
+cmdSeqFromList :: [Command] -> CommandSeq
+cmdSeqFromList = foldr (\c t -> Free (const t <$> c)) $ Pure ()
+
+cmdSeqToList :: CommandSeq -> [Command]
+cmdSeqToList = go
+  where
+    go :: Free CommandF () -> [Command]
+    go (Pure _) = []
+    go (Free cmd) = (const () <$> cmd) : extract (go <$> cmd)
+
 
 instance Coded Axis where
   encode X = putBit False >> putBit True
