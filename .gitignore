@@ -4,7 +4,7 @@ icfpc2018.cabal
 *.swp
 *.hi
 *.o
-icfpc2018.iml
+*.iml
 /.idea/
 /out/
 /privatekey
