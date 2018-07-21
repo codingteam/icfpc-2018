@@ -6,6 +6,8 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Array
 import Data.Int
+import Data.List
+import Data.Ord
 import qualified Data.Array.BitArray as BA
 
 import Trace
@@ -137,6 +139,9 @@ origin = (0,0,0)
 clamp :: Ord a => (a,  a) -> a -> a
 clamp (low, high) value = max low (min value high)
 
+plus :: P3d -> P3d -> P3d
+plus (x1,y1,z1) (x2,y2,z2) = (x1+y1, x2+y2, z1+z2)
+
 extractMove :: P3d -> Either P3d (Command, P3d)
 extractMove p@(dx, dy, dz) =
   let clamp5 = clamp (-5, 5)
@@ -174,10 +179,15 @@ moveCommands :: P3d -> [Command]
 moveCommands (0,0,0) = []
 moveCommands p =
   case extractMove p of
-    Left p'@(x, y, z) -> if x == 0 && y == 0 && z == 0
-
-                 then []
-                 else error $ "Cannot do such move: " ++ show p'
+    Left p'@(dx, dy, dz) ->
+      if dx == 0 && dy == 0 && dz == 0
+        then []
+        else let (axis,md) = minimumBy (comparing snd) $ zip [0..] [abs dx, abs dy, abs dz]
+                 (diff1, diff2) = case axis of
+                                   0 -> ((dx, 0, 0), (0, dy, dz))
+                                   1 -> ((0, dy, 0), (dx, 0, dz))
+                                   2 -> ((0, 0, dz), (dx, dy, 0))
+             in  moveCommands diff1 ++ moveCommands diff2
     Right (cmd, p') -> cmd : moveCommands p'
 
 -- | Move one bot in series of steps
