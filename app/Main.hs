@@ -22,6 +22,5 @@ main = do
   args <- getArgs
   case args of
     ["display", file] -> displayModelFile file
-    ["gentrace-dummy", infile, outfile] -> gentrace dummyTraceGen infile outfile
-    ["dumb", infile, outfile] -> dumbHighSolver infile outfile
+    ["gentrace-dummy", infile, outfile] -> dumbHighSolver infile outfile
     _ -> fail "unknown command"
