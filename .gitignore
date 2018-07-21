@@ -7,3 +7,4 @@ icfpc2018.cabal
 icfpc2018.iml
 /.idea/
 /out/
+/privatekey

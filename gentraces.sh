@@ -11,11 +11,20 @@ fi
 
 EXEC="icfpc2018-exe"
 COMMAND="$1"
+KEYFILE=`realpath privatekey`
 INFILE=`realpath "$2"`
 OUTFILE=`realpath "$3"`
 
 TMP_IN_DIR=`realpath out/gentraces/models`
 TMP_OUT_DIR=`realpath out/gentraces/traces`
+
+if [ -f "$KEYFILE" ]; then
+	echo "ENCRYPT: Using private key from $KEYFILE"
+	KEY=`cat "$KEYFILE"`
+else
+	echo "ENCRYPT: don't encrypt (no keyfile)"
+	KEY=''
+fi
 
 do_unzip(){
 	rm -rf "$TMP_IN_DIR"
@@ -30,8 +39,14 @@ do_zip(){
 	pushd "$TMP_OUT_DIR"
 	rm -rf "$OUTFILE"
 	echo "zip: $TMP_OUT_DIR/* $OUTFILE"
-	#TODO: encrypt
-	zip "$OUTFILE" *
+	if [ -z "$KEY" ]; then
+		zip "$OUTFILE" *
+		echo "$OUTFILE UNENCRYPTED"
+		echo "put private key to $KEYFILE to encrypt"
+	else
+		zip --encrypt -P "$KEY" "$OUTFILE" *
+		echo "$OUTFILE ENCRYPTED with $KEY"
+	fi
 	popd 
 }
 
