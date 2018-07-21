@@ -9,6 +9,7 @@ import Data.Int
 import Data.List
 import Data.Ord
 import qualified Data.Sequence as Seq
+import qualified Data.Set as S
 import Data.Sequence ((|>))
 import qualified Data.Array.BitArray as BA
 import qualified Data.Array.BitArray.IO as BAIO
@@ -136,18 +137,55 @@ issueFill bid nd = do
     updateGrounded p@(x,y,z) = do
         grounded <- gets gsGrounded
         result <- check grounded p
-        setGrounded grounded p result
+
+        groundedHelper S.empty [p]
+
         return result
+
+    groundedHelper :: S.Set P3 -> [P3] -> Generator ()
+    groundedHelper _       [] = return ()
+    groundedHelper checked (p@(x,y,z) : toCheck) = do
+        filled <- isFilled p
+
+        grounded <- gets gsGrounded
+        isGrounded <- check grounded p
+
+        let checked' = S.insert p checked
+
+        if filled && not isGrounded
+          then do
+            setGrounded grounded p True
+
+            resolution <- liftM mfResolution $ gets gsModel
+            let inBounds x = x >= 0 && x < resolution
+
+            let neighbours =
+                  filter (\x -> S.notMember x checked') $
+                  filter (\(x, y, z) -> inBounds x && inBounds y && inBounds z)
+                      [(x+1, y, z), (x, y+1, z), (x, y, z+1),
+                       (x-1, y, z), (x, y-1, z), (x, y, z-1)]
+            groundedHelper checked' (neighbours ++ toCheck)
+          else
+            -- p is either filled && grounded, or not filled && not grounded.
+            -- Either way, it shouldn't be grounded, so its neighbours don't
+            -- need to be checked and updated.
+            groundedHelper checked' toCheck
 
     setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
     setGrounded bits p ok =
       lift $ BAIO.writeArray bits p ok
 
     -- we just filled this voxel by issuing Fill command
+    check :: BAIO.IOBitArray P3 -> P3 -> Generator Bool
     check _ (_,0,_) = return True
     check grounded p@(x,y,z) = do
-          let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
-                            (x-1, y, z), (x, y-1, z), (x, y, z-1)]
+          resolution <- liftM mfResolution $ gets gsModel
+          let inBounds x = x >= 0 && x < resolution
+
+          let neighbours =
+                filter (\(x, y, z) -> inBounds x && inBounds y && inBounds z)
+                    [(x+1, y, z), (x, y+1, z), (x, y, z+1),
+                     (x-1, y, z), (x, y-1, z), (x, y, z-1)]
           neighbGrounded <- forM neighbours $ \n ->
                                 lift $ BAIO.readArray grounded n
           return $ or neighbGrounded
