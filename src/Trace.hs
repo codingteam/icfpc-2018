@@ -23,7 +23,9 @@ data LongLinDiff = LongLinDiff Axis Int8
   deriving (Eq, Show)
 
 data NearDiff = NearDiff Int8 Int8 Int8
+  deriving (Eq, Show)
 
+data FarDiff = FarDiff Int8 Int8 Int8
   deriving (Eq, Show)
 
 data Command =
@@ -36,6 +38,8 @@ data Command =
   | Fill NearDiff
   | FusionP NearDiff
   | FusionS NearDiff
+  | GFill NearDiff FarDiff
+  | GVoid NearDiff FarDiff
   deriving (Eq, Show)
 
 instance Coded Axis where
@@ -85,6 +89,21 @@ instance Coded NearDiff where
         x = xy `div` 3
     return $ NearDiff (x-1) (y-1) (z-1)
 
+instance Coded FarDiff where
+  encode (FarDiff dx dy dz) = do
+    putBits 7 0 ((dx + 30) :: Word8)
+    putBits 7 0 ((dy + 30) :: Word8)
+    putBits 7 0 ((dz + 30) :: Word8)
+
+  decode = do
+    dx <- getWord8
+    dy <- getWord8
+    dz <- getWord8
+    FarDiff
+      <$> ((fromIntegral dx)-30)
+      <*> ((fromIntegral dy)-30)
+      <*> ((fromIntegral dz)-30)
+
 instance Coded Command where
   encode Halt = putBits 7 0 (0b11111111 :: Word8)
   encode Wait = putBits 7 0 (0b11111110 :: Word8)
@@ -120,6 +139,10 @@ instance Coded Command where
   encode (Fill nd) = do
     encode nd
     putBits 2 0 (0b011 :: Int)
+
+  encode (GFill nd fd) = undefined
+
+  encode (GVoid nd fd) = undefined
 
   decode = parseOpcode =<< getWord8
     where

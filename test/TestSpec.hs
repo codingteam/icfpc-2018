@@ -53,6 +53,12 @@ specExamples = testGroup "Specification examples"
 
   , testCase "encode.Fill" $
       testEncode (Fill (NearDiff 0 (-1) 0)) @?= "01010011"
+
+  , testCsae "encode.GFill" $
+      testEncode (GFill (NearDiff 0 (-1) 0) (FarDiff 10 (-15) 20)) @?= "01010001 00101000 00001111 00110010"
+
+  , testCase "encode.GVoid" $
+      testEncode (GVoid (NearDiff 1 0 0) (FarDiff 5 5 (-5))) @?= "10110000 00100011 00100011 00011001"
   ]
 
 testCodecFor :: (Eq a, Show a, Coded a) => a -> Assertion
@@ -83,4 +89,10 @@ codec = testGroup "Encoding-then-decoding returns the same value"
   , testCase "Fission" $ testCodecFor (Fission (NearDiff 0 0 1) 5)
 
   , testCase "Fill" $ testCodecFor (Fill (NearDiff 0 (-1) 0))
+
+  , testCsae "GFill" $
+      testCodecFor (GFill (NearDiff 0 (-1) 0) (FarDiff 10 (-15) 20))
+
+  , testCase "GVoid" $
+      testCodecFor (GVoid (NearDiff 1 0 0) (FarDiff 5 5 (-5)))
   ]
