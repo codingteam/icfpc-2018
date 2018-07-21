@@ -64,6 +64,11 @@ testMergeSMoves = testGroup "mergeSMoves"
         m2 = SMove (LongLinDiff Z (-4))
         result = SMove (LongLinDiff Z (-15))
       in mergeSMoves [m1, m2] @?= [result]
+  , testCase "Unoptimal input.3" $
+      let
+        m1 = SMove (LongLinDiff Y (-3))
+        m2 = SMove (LongLinDiff Y 3)
+      in mergeSMoves [m1, m2] @?= []
 
   , testCase "Only first occurrence is optimized" $
       let

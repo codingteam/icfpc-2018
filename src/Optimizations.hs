@@ -50,5 +50,9 @@ mergeSMoves [] = []
 mergeSMoves (m1@(SMove (LongLinDiff a1 d1)):m2@(SMove (LongLinDiff a2 d2)):cmds)
   | (a1 /= a2) || (d1 + d2 < -15) || (d1 + d2 > 15)
       = m1 : (mergeSMoves (m2:cmds))
-  | otherwise = (SMove (LongLinDiff a1 (d1 + d2))) : cmds
+  | otherwise =
+      let d = d1 + d2
+      in if d == 0
+        then cmds
+        else (SMove (LongLinDiff a1 d)) : cmds
 mergeSMoves (cmd:cmds) = cmd : (mergeSMoves cmds)
