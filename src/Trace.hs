@@ -6,6 +6,7 @@ import Data.Bytes.Put
 import Data.Bytes.Get
 import Data.Bits.Coded
 import Data.Bits.Coding
+import Data.Binary.Get (Get)
 import Data.Binary.Put (PutM)
 import qualified Data.ByteString.Lazy as L
 import Data.Word
@@ -179,6 +180,21 @@ testEncode x = showBits $ encodeL x
 
 testDecode :: Coded a => [Word8] -> a
 testDecode bytes = runGetL (runDecode decode) $ L.pack bytes
+
+getTrace :: Coding Get [Command]
+getTrace = do
+  empty <- isEmpty
+  if empty
+    then return []
+    else do
+      cmd <- decode
+      rest <- getTrace
+      return $ cmd : rest
+
+readTrace :: FilePath -> IO [Command]
+readTrace path = do
+  bstr <- L.readFile path
+  return $ runGetL (runDecode getTrace) bstr
 
 writeTrace :: FilePath -> [Command] -> IO ()
 writeTrace path commands = L.writeFile path $ encodeR (encodeMany commands)
