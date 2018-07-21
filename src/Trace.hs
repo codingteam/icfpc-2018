@@ -167,6 +167,12 @@ instance Coded Command where
 
         | otherwise = error "Command.decode: invalid input"
 
+-- | Converts short linear difference into a long linear difference.
+--
+-- This conversion is valid since any short linear difference satisfies
+-- mlen(ld) ≤ 5, which also satisfies LongLinDiff's predicate of mlen(ld) ≤ 15.
+fromShortLinDiff :: ShortLinDiff -> LongLinDiff
+fromShortLinDiff (ShortLinDiff axis diff) = LongLinDiff axis diff
 
 encodeL :: Coded a => a -> L.ByteString
 encodeL x = runPutL . runEncode $ encode x >> flush
