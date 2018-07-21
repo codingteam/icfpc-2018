@@ -1,5 +1,10 @@
 {-# LANGUAGE BinaryLiterals #-}
 
+module TestSpec (
+  specExamples,
+  codec
+) where
+
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -14,12 +19,6 @@ import Trace
 assert :: String -> Bool -> IO ()
 assert _ True = return ()
 assert message False = fail message
-
-main :: IO ()
-main = defaultMain tests
-
-tests :: TestTree
-tests = testGroup "Tests" [specExamples, codec]
 
 specExamples :: TestTree
 specExamples = testGroup "Specification examples"
