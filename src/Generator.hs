@@ -114,10 +114,10 @@ issueFission bid n direction = do
   when (null (_seeds bot1)) $
     fail $ "Bot does not have seeds for fission: " ++ show bid
   let (newBid : srcSeeds) = sort (_seeds bot1)
-      bot1' = bot1 {_seeds = take n srcSeeds}
+      bot1' = bot1 {_seeds = drop n srcSeeds }
       bot2' = bot1 {
                 _bid = newBid,
-                _seeds = drop n srcSeeds,
+                _seeds = take n srcSeeds,
                 _pos = nearPlus (_pos bot1) direction
               }
   modify $ \st -> st {
