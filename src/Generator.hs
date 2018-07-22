@@ -99,10 +99,6 @@ issue bid cmd = do
   let trace' = trace |> cmd
   modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
 
-flipH :: Harmonics -> Harmonics
-flipH Low = High
-flipH High = Low
-
 -- | Issue Flip command and remember resulting harmonics.
 issueFlip :: BID -> Generator ()
 issueFlip bid = do

@@ -8,6 +8,7 @@ import Generator
 import Algorithms
 import TraceGens
 import Sim
+import Evaluator
 import Data.Array.BitArray
 import Data.Binary
 
@@ -25,4 +26,5 @@ main = do
     ["construct", infile, outfile] -> dumbHighSolver infile outfile
     ["deconstruct", infile, outfile] -> dumbDestructor infile outfile
     ["reconstruct", src, dst, outfile] -> dumbReconstructor src dst outfile
+    ["eval", model, trace] -> doEvalTrace model trace
     _ -> fail "unknown command"
