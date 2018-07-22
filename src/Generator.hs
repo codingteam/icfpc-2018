@@ -13,6 +13,7 @@ import qualified Data.Set as S
 import Data.Sequence ((|>))
 import qualified Data.Array.BitArray as BA
 import qualified Data.Array.BitArray.IO as BAIO
+import Text.Printf
 
 import Trace
 import Sim
@@ -59,7 +60,7 @@ initState model = do
     return $ GS model Low filled grounded 0 [(0,[bid])] bots traces
   where
     bid = 0
-    bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) []) | bid <- [0 .. maxBID]]
+    bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) [1 .. maxBID]) | bid <- [0 .. maxBID]]
     traces = array (0, maxBID) [(bid, Seq.empty) | bid <- [0 .. maxBID]]
     r = mfResolution model
     filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
@@ -106,9 +107,41 @@ issueFlip bid = do
   issue bid Flip
 
 -- | Issue Fission command forking a new bot taking N seeds with him from the current bot.
-issueFission :: BID -> Int -> NearDiff -> Generator ()
+-- returns new bot ID
+issueFission :: BID -> Int -> NearDiff -> Generator BID
 issueFission bid n direction = do
-  modify $ \st -> st
+  aliveBids <- gets (snd . head . gsAliveBots) -- we are going to insert to head of this list
+  bot1 <- getBot bid
+  when (null (_seeds bot1)) $
+    fail $ "Bot does not have seeds for fission: " ++ show bid
+  let (newBid : srcSeeds) = sort (_seeds bot1)
+      bot1' = bot1 {_seeds = take n srcSeeds}
+      bot2' = bot1 {
+                _bid = newBid,
+                _seeds = drop n srcSeeds,
+                _pos = nearPlus (_pos bot1) direction
+              }
+  modify $ \st -> st {
+      gsBots = gsBots st // [(bid, bot1'), (newBid, bot2')],
+      gsAliveBots = (gsStepNumber st, newBid : aliveBids) : gsAliveBots st
+    }
+  issue bid (Fission direction $ fromIntegral n)
+  return newBid
+
+issueFusion :: BID -> BID -> Generator ()
+issueFusion bid1 bid2 = do
+  aliveBids <- gets (snd . head . gsAliveBots) -- we are going to insert to head of this list
+  bot1 <- getBot bid1
+  bot2 <- getBot bid2
+  case nearSub (_pos bot1) (_pos bot2) of
+    Nothing -> fail $ printf "Bots are too far: #%d %s, #%d %s"
+                          bid1 (show $ _pos bot1) bid2 (show $ _pos bot2)
+    Just nd -> do
+      issue bid2 $ FusionP (negateNear nd)
+      issue bid1 $ FusionS nd
+      modify $ \st -> st {
+                        gsAliveBots = (gsStepNumber st + 1, Data.List.delete bid2 aliveBids) : gsAliveBots st
+                      }
 
 -- | Set harmonics to target value
 setHarmonics :: BID -> Harmonics -> Generator ()
@@ -119,6 +152,17 @@ setHarmonics bid target = do
 
 nearPlus :: P3 -> NearDiff -> P3
 nearPlus (x,y,z) (NearDiff dx dy dz) = (x+fromIntegral dx, y+fromIntegral dy, z+fromIntegral dz)
+
+nearSub :: P3 -> P3 -> Maybe NearDiff
+nearSub (x1,y1,z1) (x2,y2,z2) =
+  let dx = x1-x2
+      dy = y1-y2
+      dz = z1-z2
+  in  Just $ NearDiff (fromIntegral dx) (fromIntegral dy) (fromIntegral dz)
+--   in  
+--   in  if maximum [abs dx, abs dy, abs dz] == 1
+--         then Just $ NearDiff (fromIntegral dx) (fromIntegral dy) (fromIntegral dz)
+--         else Nothing
 
 negateNear :: NearDiff -> NearDiff
 negateNear (NearDiff dx dy dz) = NearDiff (-dx) (-dy) (-dz)
@@ -353,12 +397,14 @@ makeTrace model gen = do
   st <- execStateT gen =<< initState model
   let traces = gsTraces st
       maxLen = maximum $ map length $ elems traces
-      botsAliveAtStep step = last [bots | (s, bots) <- gsAliveBots st, s <= step]
+      botsAliveAtStep step = head [bots | (s, bots) <- gsAliveBots st, s <= step]
       botsCommandsAtStep step = map (botCommand step) [traces ! bid | bid <- botsAliveAtStep step]
       botCommand step trace =
         if step < length trace
           then trace `Seq.index` step
           else Wait
+  forM_ [0 .. maxLen - 1] $ \step -> do
+    printf "step #%d: alive %s\n" step (show $ botsAliveAtStep step)
   return $ concatMap botsCommandsAtStep [0 .. maxLen-1]
 
 test1 :: Generator ()
@@ -369,6 +415,27 @@ test1 = do
   issue bid $ Fill (NearDiff 0 1 0)
   step
   move bid (5, 0, 5)
+  issue bid Halt
+  step
+
+test2 :: Generator ()
+test2 = do
+  (bid:_) <- getBids
+  issue bid Flip
+  step
+  move bid (5, 0, 5)
+  issue bid $ Fill (NearDiff 0 1 0)
+  step
+  bid2 <- issueFission bid 1 (NearDiff 1 0 0) 
+  step
+  move bid2 (5, 0, 9)
+  issue bid2 $ Fill (NearDiff 0 1 0)
+  step
+  move bid2 (6, 0, 5)
+  issueFusion bid bid2
+  step
+  move bid (0,0,0)
+  issue bid Flip
   issue bid Halt
   step
 
