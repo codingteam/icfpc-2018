@@ -194,13 +194,12 @@ dumbHighSolver modelPath tracePath = do
   trace <- makeTrace model $ do
                 let bid = 0
                     r = mfResolution model
-                -- issueFlip bid
                 dumbFill bid
                 bot <- getBot bid
                 let (x,y,z) = _pos bot
                 move bid (0,y,0)
                 move bid (0,0,0)
-                -- issueFlip bid
+                setHarmonics bid Low
                 issue bid Halt
   print trace
   writeTrace tracePath trace
