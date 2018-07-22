@@ -291,6 +291,7 @@ test4 = do
   move bid2 (6, 1, 1)
   issueFusion bid bid2
   step
+  move bid (0,1,0)
   move bid (0,0,0)
   issue bid Flip
   issue bid Halt

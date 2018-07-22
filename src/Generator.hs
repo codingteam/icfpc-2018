@@ -136,8 +136,8 @@ issueFusion bid1 bid2 = do
     Nothing -> fail $ printf "Bots are too far: #%d %s, #%d %s"
                           bid1 (show $ _pos bot1) bid2 (show $ _pos bot2)
     Just nd -> do
-      issue bid2 $ FusionP (negateNear nd)
-      issue bid1 $ FusionS nd
+      issue bid1 $ FusionP (negateNear nd)
+      issue bid2 $ FusionS nd
       modify $ \st -> st {
                         gsAliveBots = (gsStepNumber st + 1, Data.List.delete bid2 aliveBids) : gsAliveBots st
                       }
