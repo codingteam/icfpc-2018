@@ -48,7 +48,8 @@ data GeneratorState = GS {
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
     gsBots :: Array BID BotState,
-    gsTraces :: ! (Array BID BotTrace) -- Trace is to be filled with Wait if bot does nothing or is not alive.
+    gsTraces :: ! (Array BID BotTrace), -- Trace is to be filled with Wait if bot does nothing or is not alive.
+    gsUngroundedCount :: !Int -- How many filled voxels are ungrounded
   }
 
 maxBID :: BID
@@ -63,7 +64,7 @@ initState model = do
 
     filled <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
 
-    return $ GS model Low filled grounded 0 [(0,[bid])] bots traces
+    return $ GS model Low filled grounded 0 [(0,[bid])] bots traces 0
   where
     bid = 0
     bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) [1 .. maxBID]) | bid <- [0 .. maxBID]]
@@ -190,10 +191,20 @@ issueFill bid nd = do
     -- returns True if the voxel is grounded as a result.
     updateGroundedAtFill :: P3 -> Generator ()
     updateGroundedAtFill p = do
-        result <- willBeGrounded p
+        incUngroundedCount
 
-        when result $ do
-          groundedHelper S.empty [p]
+        result <- willBeGrounded p
+        when result $ groundedHelper S.empty [p]
+
+    incUngroundedCount :: Generator ()
+    incUngroundedCount = do
+      count <- gets gsUngroundedCount
+      modify $ \st -> st { gsUngroundedCount = count + 1 }
+
+    decUngroundedCount :: Generator ()
+    decUngroundedCount = do
+      count <- gets gsUngroundedCount
+      modify $ \st -> st { gsUngroundedCount = count - 1 }
 
     groundedHelper :: S.Set P3 -> [P3] -> Generator ()
     groundedHelper _       [] = return ()
@@ -208,6 +219,7 @@ issueFill bid nd = do
           then do
             grounded <- gets gsGrounded
             setGrounded grounded p True
+            decUngroundedCount
 
             neighbours' <- neighbours p
             let neighbours'' = filter (\x -> S.notMember x checked') neighbours'

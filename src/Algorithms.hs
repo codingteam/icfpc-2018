@@ -53,8 +53,11 @@ fill bid dir p@(x,y,z) = do
     unless grounded $
       setHarmonics bid High
     issueFill bid diff'
-    when grounded $
+
+    count <- gets gsUngroundedCount
+    when (count == 0) $
       setHarmonics bid Low
+
     step
 
 -- This does not know yet when to switch harmonics,
