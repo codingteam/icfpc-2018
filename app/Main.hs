@@ -2,6 +2,7 @@ module Main where
 
 import System.Environment
 
+import ParallelAlgorithms
 import Trace
 import Model
 import Generator
@@ -28,4 +29,5 @@ main = do
     ["reconstruct", src, dst, outfile] -> dumbReconstructor src dst outfile
     ["eval", model, trace] -> doEvalTrace model trace
     ("select" : model : traces) -> selectBest model traces
+    ["parallel", infile, outfile] -> runAlgorithm infile outfile parallelFill
     _ -> fail "unknown command"
