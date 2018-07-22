@@ -58,9 +58,6 @@ maxBID = 40
 initState :: ModelFile -> IO GeneratorState
 initState model = do
     grounded <- BAIO.newArray ((0,0,0), (r-1,r-1,r-1)) False
-    forM_ [0..r-1] $ \x -> do
-      forM_ [0..r-1] $ \z -> do
-        BAIO.writeArray grounded (x, 0, z) True
 
     filled <- BAIO.newArray ((0,0,0), (r-1,r-1,r-1)) False
 
@@ -207,6 +204,7 @@ issueFill bid nd = do
       count <- gets gsUngroundedCount
       modify $ \st -> st { gsUngroundedCount = count - 1 }
 
+    -- | Note: this is only called for points that are going to be grounded.
     groundedHelper :: S.Set P3 -> [P3] -> Generator ()
     groundedHelper _       [] = return ()
     groundedHelper checked (p@(x,y,z) : toCheck) = do
@@ -257,8 +255,6 @@ willBeGrounded (_, 0, _) = return True
 willBeGrounded p@(x,y,z) = do
   neighbours' <- neighbours p
   neighbours'' <- filterM isFilled neighbours'
-
-  grounded <- gets gsGrounded
   neighbGrounded <- mapM Generator.isGrounded neighbours''
 
   return $ or neighbGrounded
