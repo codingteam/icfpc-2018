@@ -154,6 +154,13 @@ runTest2 path gen = do
   print trace
   writeTrace "test2.nbt" trace
 
+runAlgorithm :: FilePath -> FilePath -> Generator () -> IO ()
+runAlgorithm modelPath tracePath alrogithm = do
+  model <- decodeFile modelPath
+  trace <- makeTrace model $ do alrogithm
+  print trace
+  writeTrace tracePath trace
+
 dumbHighSolver :: FilePath -> FilePath -> IO ()
 dumbHighSolver modelPath tracePath = do
   model <- decodeFile modelPath

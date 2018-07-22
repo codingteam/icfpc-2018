@@ -2,6 +2,7 @@ module Main where
 
 import System.Environment
 
+import ParallelAlgorithms
 import Trace
 import Model
 import Generator
@@ -25,4 +26,5 @@ main = do
     ["gentrace-dummy", infile, outfile] -> dumbHighSolver infile outfile
     ["deconstruct", infile, outfile] -> dumbDestructor infile outfile
     ["reconstruct", src, dst, outfile] -> dumbReconstructor src dst outfile
+    ["parallel", infile, outfile] -> runAlgorithm infile outfile parallelFill
     _ -> fail "unknown command"
