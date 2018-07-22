@@ -174,8 +174,7 @@ negateNear (NearDiff dx dy dz) = NearDiff (-dx) (-dy) (-dz)
 
 -- | Issue the Fill command
 -- This will mark the voxel as filled in generator's state
--- Returns True if as a result the voxel is grounded.
-issueFill :: BID -> NearDiff -> Generator Bool
+issueFill :: BID -> NearDiff -> Generator ()
 issueFill bid nd = do
     bot <- getBot bid
     let c' = nearPlus (_pos bot) nd
@@ -189,28 +188,25 @@ issueFill bid nd = do
   where
     -- This should be called each time the voxel is filled
     -- returns True if the voxel is grounded as a result.
-    updateGroundedAtFill :: P3 -> Generator Bool
+    updateGroundedAtFill :: P3 -> Generator ()
     updateGroundedAtFill p = do
-        grounded <- gets gsGrounded
-        result <- check grounded p
+        result <- willBeGrounded p
 
         when result $ do
           groundedHelper S.empty [p]
-
-        return result
 
     groundedHelper :: S.Set P3 -> [P3] -> Generator ()
     groundedHelper _       [] = return ()
     groundedHelper checked (p@(x,y,z) : toCheck) = do
         filled <- isFilled p
 
-        grounded <- gets gsGrounded
-        isGrounded <- check grounded p
+        grndd <- Generator.isGrounded p
 
         let checked' = S.insert p checked
 
-        if filled && not isGrounded
+        if filled && not grndd
           then do
+            grounded <- gets gsGrounded
             setGrounded grounded p True
 
             neighbours' <- neighbours p
@@ -226,15 +222,6 @@ issueFill bid nd = do
     setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
     setGrounded bits p ok =
       lift $ BAIO.writeArray bits p ok
-
-    -- we just filled this voxel by issuing Fill command
-    check :: BAIO.IOBitArray P3 -> P3 -> Generator Bool
-    check _ (_,0,_) = return True
-    check grounded p@(x,y,z) = do
-          neighbours' <- neighbours p
-          neighbours'' <- filterM isFilled neighbours'
-          neighbGrounded <- mapM Generator.isGrounded neighbours''
-          return $ or neighbGrounded
 
     -- mark voxels as filled by generator
     markFilled :: [P3] -> Generator ()
