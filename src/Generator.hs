@@ -56,7 +56,10 @@ maxBID = 40
 
 initState :: ModelFile -> IO GeneratorState
 initState model = do
-    grounded <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
+    grounded <- BAIO.newArray ((0,0,0), (r-1,r-1,r-1)) False
+    forM_ [0..r-1] $ \x -> do
+      forM_ [0..r-1] $ \z -> do
+        BAIO.writeArray grounded (x, 0, z) True
     return $ GS model Low filled grounded 0 [(0,[bid])] bots traces
   where
     bid = 0
