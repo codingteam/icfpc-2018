@@ -5,7 +5,7 @@ set -e
 if [ "$#" -ne 3 ]; then
 	echo "Usage: $0 COMMAND infile.zip outfile.zip"
 	echo "COMMAND is one of"
-	echo "  gentrace-dummy"
+	echo "  prepare-submission"
 	exit 1
 fi
 
@@ -50,27 +50,44 @@ do_zip(){
 	popd 
 }
 
-do_run(){
-	MDL="$1"
-	NBT="${MDL%_tgt.mdl}.nbt"
-	echo "exec: $TMP_IN_DIR/$MDL -> $TMP_OUT_DIR/$NBT"
-	stack exec "$EXEC" -- "$COMMAND" "$TMP_IN_DIR/$MDL" "$TMP_OUT_DIR/$NBT"
-}
-
-run(){
-	rm -rf "$TMP_OUT_DIR"
-	mkdir -p "$TMP_OUT_DIR"
-	#TODO: use xargs ?
-	ls -1 "$TMP_IN_DIR" | grep 'mdl$' | while read f ; do
-#		echo "file:$f"
-		do_run "$f"
+solve_fa(){
+	ls -1 "$TMP_IN_DIR" | grep 'mdl$' | grep '^FA' | while read f ; do
+        MDL="$f"
+        NBT="${MDL%_tgt.mdl}.nbt"
+        echo "exec: $TMP_IN_DIR/$MDL -> $TMP_OUT_DIR/$NBT"
+        stack exec "$EXEC" -- "construct" "$TMP_IN_DIR/$MDL" "$TMP_OUT_DIR/$NBT"
 	done
 }
 
-if [ "$COMMAND" == "gentrace-dummy" ]; then
+solve_fd(){
+	ls -1 "$TMP_IN_DIR" | grep 'mdl$' | grep '^FD' | while read f ; do
+        MDL="$f"
+        NBT="${MDL%_src.mdl}.nbt"
+        echo "exec: $TMP_IN_DIR/$MDL -> $TMP_OUT_DIR/$NBT"
+        stack exec "$EXEC" -- "deconstruct" "$TMP_IN_DIR/$MDL" "$TMP_OUT_DIR/$NBT"
+	done
+}
+
+solve_fr(){
+	ls -1 "$TMP_IN_DIR" | grep '_src\.mdl$' | grep '^FR' | while read f ; do
+        SRC_MDL="$f"
+        TGT_MDL="${SRC_MDL%_src.mdl}_tgt.mdl"
+        NBT="${SRC_MDL%_src.mdl}.nbt"
+        echo "exec: $TMP_IN_DIR/$SRC_MDL -> $TMP_OUT_DIR/$NBT"
+        stack exec "$EXEC" -- "reconstruct" "$TMP_IN_DIR/$SRC_MDL" "$TMP_IN_DIR/$TGT_MDL"  "$TMP_OUT_DIR/$NBT"
+	done
+}
+
+if [ "$COMMAND" == "prepare-submission" ]; then
 	stack build
 	do_unzip
-	run
+
+	rm -rf "$TMP_OUT_DIR"
+	mkdir -p "$TMP_OUT_DIR"
+
+	solve_fa
+    solve_fd
+    solve_fr
 	do_zip
 	echo "done"
 else

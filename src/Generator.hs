@@ -58,11 +58,8 @@ maxBID = 40
 initState :: ModelFile -> IO GeneratorState
 initState model = do
     grounded <- BAIO.newArray ((0,0,0), (r-1,r-1,r-1)) False
-    forM_ [0..r-1] $ \x -> do
-      forM_ [0..r-1] $ \z -> do
-        BAIO.writeArray grounded (x, 0, z) True
 
-    filled <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
+    filled <- BAIO.newArray ((0,0,0), (r-1,r-1,r-1)) False
 
     return $ GS model Low filled grounded 0 [(0,[bid])] bots traces 0
   where
@@ -101,10 +98,6 @@ issue bid cmd = do
   trace <- getBotTrace bid
   let trace' = trace |> cmd
   modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
-
-flipH :: Harmonics -> Harmonics
-flipH Low = High
-flipH High = Low
 
 -- | Issue Flip command and remember resulting harmonics.
 issueFlip :: BID -> Generator ()
@@ -181,9 +174,10 @@ issueFill bid nd = do
     let c' = nearPlus (_pos bot) nd
     filled <- isFilled c'
     if filled
-      then fail $ "Voxel is already filled: " ++ show c'
+      then fail $ printf "Voxel is already filled: %s, filling from %s" (show c') (show $ _pos bot)
       else do
            issue bid $ Fill nd
+           -- lift $ printf "Filling: %s\n" (show c')
            markFilled [c']
            updateGroundedAtFill c'
   where
@@ -206,6 +200,7 @@ issueFill bid nd = do
       count <- gets gsUngroundedCount
       modify $ \st -> st { gsUngroundedCount = count - 1 }
 
+    -- | Note: this is only called for points that are going to be grounded.
     groundedHelper :: S.Set P3 -> [P3] -> Generator ()
     groundedHelper _       [] = return ()
     groundedHelper checked (p@(x,y,z) : toCheck) = do
@@ -256,8 +251,6 @@ willBeGrounded (_, 0, _) = return True
 willBeGrounded p@(x,y,z) = do
   neighbours' <- neighbours p
   neighbours'' <- filterM isFilled neighbours'
-
-  grounded <- gets gsGrounded
   neighbGrounded <- mapM Generator.isGrounded neighbours''
 
   return $ or neighbGrounded

@@ -11,7 +11,8 @@ module Sim (
   isWellFormedState,
   activeBots,
   isGrounded,
-  enumVoxels
+  enumVoxels,
+  flipH
 ) where
 
 import Data.List (intersect, union, nub) -- yes the horrible O(n²)
@@ -32,6 +33,10 @@ data BotState = Bot {
 } deriving (Show, Eq)
 
 data Harmonics = Low | High deriving (Show, Eq)
+
+flipH :: Harmonics -> Harmonics
+flipH Low = High
+flipH High = Low
 
 type Resolution = Word8
 

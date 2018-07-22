@@ -16,17 +16,39 @@ import Text.Printf
 data Axis = X | Y | Z
   deriving (Eq, Show, Enum)
 
+type Energy = Integer
+
+class Distance a where
+  mlen :: a -> Energy
+  clen :: a -> Energy
+
 data ShortLinDiff = ShortLinDiff Axis Int8
   deriving (Eq, Show)
+
+instance Distance ShortLinDiff where
+  mlen (ShortLinDiff _ n) = fromIntegral $ abs n
+  clen (ShortLinDiff _ n) = fromIntegral $ abs n
 
 data LongLinDiff = LongLinDiff Axis Int8
   deriving (Eq, Show)
 
+instance Distance LongLinDiff where
+  mlen (LongLinDiff _ n) = fromIntegral $ abs n
+  clen (LongLinDiff _ n) = fromIntegral $ abs n
+
 data NearDiff = NearDiff Int8 Int8 Int8
   deriving (Eq, Show)
 
+instance Distance NearDiff where
+  mlen (NearDiff dx dy dz) = fromIntegral $ abs dx + abs dy + abs dz
+  clen (NearDiff dx dy dz) = fromIntegral $ maximum [abs dx, abs dy, abs dz]
+
 data FarDiff = FarDiff Int8 Int8 Int8
   deriving (Eq, Show)
+
+instance Distance FarDiff where
+  mlen (FarDiff dx dy dz) = fromIntegral $ abs dx + abs dy + abs dz
+  clen (FarDiff dx dy dz) = fromIntegral $ maximum [abs dx, abs dy, abs dz]
 
 data Command =
     Halt
