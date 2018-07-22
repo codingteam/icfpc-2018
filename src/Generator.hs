@@ -138,8 +138,10 @@ issueFusion bid1 bid2 = do
     Just nd -> do
       issue bid1 $ FusionP (negateNear nd)
       issue bid2 $ FusionS nd
+      let bot1' = bot1 {_seeds = sort $ bid2 : (_seeds bot1 ++ _seeds bot2)}
       modify $ \st -> st {
-                        gsAliveBots = (gsStepNumber st + 1, Data.List.delete bid2 aliveBids) : gsAliveBots st
+                        gsAliveBots = (gsStepNumber st + 1, Data.List.delete bid2 aliveBids) : gsAliveBots st,
+                        gsBots = gsBots st // [(bid1, bot1')]
                       }
 
 -- | Set harmonics to target value
