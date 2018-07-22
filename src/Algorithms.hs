@@ -44,8 +44,8 @@ findFreeNeighbour p = do
 --     Just diff -> do
 --       return (nearPlus p diff, diff)
 
-fill :: BID -> LineDirection -> P3 -> Generator ()
-fill bid dir p@(x,y,z) = do
+fill :: BID -> P3 -> Generator ()
+fill bid p@(x,y,z) = do
     (neighbour, diff) <- findFreeNeighbour p
     let diff' = negateNear diff
     move bid neighbour
@@ -135,7 +135,7 @@ fillLine bid dir y z = do
       forM_ (makeLine dir r y z) $ \p -> do
         ok <- isFilledInModel p
         when ok $
-          fill bid dir p
+          fill bid p
 
 threes :: [a] -> [[a]]
 threes [] = []
