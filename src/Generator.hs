@@ -228,8 +228,8 @@ issueFill bid nd = do
     check _ (_,0,_) = return True
     check grounded p@(x,y,z) = do
           neighbours' <- neighbours p
-          neighbGrounded <- forM neighbours' $ \n ->
-                                lift $ BAIO.readArray grounded n
+          neighbours'' <- filterM isFilled neighbours'
+          neighbGrounded <- mapM Generator.isGrounded neighbours''
           return $ or neighbGrounded
 
 -- | Is voxel grounded?
