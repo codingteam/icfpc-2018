@@ -27,4 +27,5 @@ main = do
     ["deconstruct", infile, outfile] -> dumbDestructor infile outfile
     ["reconstruct", src, dst, outfile] -> dumbReconstructor src dst outfile
     ["eval", model, trace] -> doEvalTrace model trace
+    ("select" : model : traces) -> selectBest model traces
     _ -> fail "unknown command"

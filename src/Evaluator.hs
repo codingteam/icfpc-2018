@@ -5,6 +5,8 @@ import Control.Monad
 import Control.Monad.State
 import Data.Word
 import Data.Binary (decodeFile)
+import Data.List
+import Data.Ord
 import Text.Printf
 -- import qualified Data.Array.BitArray.IO as BAIO
 
@@ -90,4 +92,15 @@ doEvalTrace modelPath tracePath = do
   trace <- readTrace tracePath
   let energy = evalTrace model trace
   printf "Energy: %d\n" energy
+
+selectBest :: FilePath -> [FilePath] -> IO ()
+selectBest modelPath tracePaths = do
+  model <- decodeFile modelPath
+  traces <- mapM readTrace tracePaths
+  res <- forM (zip tracePaths traces) $ \(path, trace) -> do
+           let energy = evalTrace model trace
+           printf "%s : %d\n" path energy
+           return (path, energy)
+  let path = fst $ minimumBy (comparing snd) res
+  putStrLn path
 
