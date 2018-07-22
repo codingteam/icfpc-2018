@@ -43,7 +43,7 @@ type P3d = (Int16, Int16, Int16)
 data GeneratorState = GS {
     gsModel :: ! ModelFile,
     gsHarmonics :: Harmonics,
-    gsFilled :: ! (BA.BitArray P3), -- voxels that are already filled by generator
+    gsFilled :: ! (BAIO.IOBitArray P3), -- voxels that are already filled by generator
     gsGrounded :: ! (BAIO.IOBitArray P3), -- grounded voxels
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
@@ -57,13 +57,13 @@ maxBID = 40
 initState :: ModelFile -> IO GeneratorState
 initState model = do
     grounded <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
+    filled <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
     return $ GS model Low filled grounded 0 [(0,[bid])] bots traces
   where
     bid = 0
     bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) [1 .. maxBID]) | bid <- [0 .. maxBID]]
     traces = array (0, maxBID) [(bid, Seq.empty) | bid <- [0 .. maxBID]]
     r = mfResolution model
-    filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
 
 type Generator a = StateT GeneratorState IO a
 
@@ -179,16 +179,16 @@ issueFill bid nd = do
       then fail $ "Voxel is already filled: " ++ show c'
       else do
            issue bid $ Fill nd
-           modify $ \st -> st {gsFilled = gsFilled st BA.// [(c', True)]}
-           updateGrounded c'
+           markFilled [c']
+           updateGroundedAtFill c'
   where
-    updateGrounded :: P3 -> Generator Bool
-    updateGrounded p@(x,y,z) = do
+    -- This should be called each time the voxel is filled
+    -- returns True if the voxel is grounded as a result.
+    updateGroundedAtFill :: P3 -> Generator Bool
+    updateGroundedAtFill p = do
         grounded <- gets gsGrounded
         result <- check grounded p
-
         groundedHelper S.empty [p]
-
         return result
 
     groundedHelper :: S.Set P3 -> [P3] -> Generator ()
@@ -238,6 +238,13 @@ issueFill bid nd = do
           neighbGrounded <- forM neighbours $ \n ->
                                 lift $ BAIO.readArray grounded n
           return $ or neighbGrounded
+    
+    -- mark voxels as filled by generator
+    markFilled :: [P3] -> Generator ()
+    markFilled cs = do
+      filled <- gets gsFilled
+      forM_ cs $ \p ->
+        lift $ BAIO.writeArray filled p True
 
 -- | Is voxel grounded?
 -- This works by definition, i.e. always returns False for non-filled voxels.
@@ -261,15 +268,6 @@ willBeGrounded (x,y,z) = do
                           then lift $ BAIO.readArray grounded n
                           else return False
   return $ or neighbGrounded
-
-allAreGrounded :: Generator Bool
-allAreGrounded = do
-  filledMatrix <- gets gsFilled
-  let filledIdxs = [idx | idx <- BA.indices filledMatrix, filledMatrix BA.! idx]
-  grounded <- gets gsGrounded
-  res <- forM filledIdxs $ \p ->
-             lift $ BAIO.readArray grounded p
-  return $ and res
 
 -- | Switch to the next step.
 -- If we did not issue commands for some bots on current steps,
@@ -384,13 +382,14 @@ isFilledInModel p = do
 isFree :: P3 -> Generator Bool
 isFree p = do
   matrix <- gets gsFilled
-  return $ not $ matrix BA.! p
+  filled <- lift $ BAIO.readArray matrix p
+  return $ not filled
 
 -- | Returns True if voxel is already filled by the generator
 isFilled :: P3 -> Generator Bool
 isFilled p = do
   matrix <- gets gsFilled
-  return $ matrix BA.! p
+  lift $ BAIO.readArray matrix p
 
 makeTrace :: ModelFile -> Generator a -> IO [Command]
 makeTrace model gen = do
@@ -403,8 +402,8 @@ makeTrace model gen = do
         if step < length trace
           then trace `Seq.index` step
           else Wait
-  forM_ [0 .. maxLen - 1] $ \step -> do
-    printf "step #%d: alive %s\n" step (show $ botsAliveAtStep step)
+--   forM_ [0 .. maxLen - 1] $ \step -> do
+--     printf "step #%d: alive %s\n" step (show $ botsAliveAtStep step)
   return $ concatMap botsCommandsAtStep [0 .. maxLen-1]
 
 test1 :: Generator ()
