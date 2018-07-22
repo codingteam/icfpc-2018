@@ -1,6 +1,7 @@
 
 module Model where
 
+import qualified Data.Array as DA
 import Data.Array.BitArray
 import Data.Array.BitArray.ByteString
 import Data.Binary
@@ -11,10 +12,17 @@ import Data.List
 
 import Sim
 
+instance (Eq x, DA.Ix x) => Eq (BitArray x) where
+  (==) a b = (elems a) == (elems b)
+
+instance (Show x, DA.Ix x) => Show (BitArray x) where
+  show = show . elems
+
 data ModelFile = ModelFile {
     mfResolution :: Word8,
     mfMatrix :: BitArray P3
   }
+  deriving (Eq)
 
 instance Show ModelFile where
   show model =
