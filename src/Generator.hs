@@ -49,7 +49,6 @@ data GeneratorState = GS {
     gsBots :: Array BID BotState,
     gsTraces :: ! (Array BID BotTrace) -- Trace is to be filled with Wait if bot does nothing or is not alive.
   }
-  deriving (Eq, Show)
 
 maxBID :: BID
 maxBID = 20
