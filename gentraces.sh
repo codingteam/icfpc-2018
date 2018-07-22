@@ -55,7 +55,7 @@ solve_fa(){
         MDL="$f"
         NBT="${MDL%_tgt.mdl}.nbt"
         echo "exec: $TMP_IN_DIR/$MDL -> $TMP_OUT_DIR/$NBT"
-        stack exec "$EXEC" -- "gentrace-dummy" "$TMP_IN_DIR/$MDL" "$TMP_OUT_DIR/$NBT"
+        stack exec "$EXEC" -- "construct" "$TMP_IN_DIR/$MDL" "$TMP_OUT_DIR/$NBT"
 	done
 }
 
