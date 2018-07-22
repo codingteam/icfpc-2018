@@ -242,9 +242,12 @@ isGrounded p = do
 -- This checks if any neighbour voxel is grounded.
 willBeGrounded :: P3 -> Generator Bool
 willBeGrounded p@(x,y,z) = do
-  grounded <- gets gsGrounded
   neighbours' <- neighbours p
-  neighbGrounded <- forM neighbours' $ \n -> lift $ BAIO.readArray grounded n
+  neighbours'' <- filterM isFilled neighbours'
+
+  grounded <- gets gsGrounded
+  neighbGrounded <- mapM Generator.isGrounded neighbours''
+
   return $ or neighbGrounded
 
 allAreGrounded :: Generator Bool
