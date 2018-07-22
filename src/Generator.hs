@@ -122,7 +122,7 @@ issueFission bid n direction = do
               }
   modify $ \st -> st {
       gsBots = gsBots st // [(bid, bot1'), (newBid, bot2')],
-      gsAliveBots = (gsStepNumber st, newBid : aliveBids) : gsAliveBots st
+      gsAliveBots = (gsStepNumber st + 1, newBid : aliveBids) : gsAliveBots st
     }
   issue bid (Fission direction $ fromIntegral n)
   return newBid
@@ -348,6 +348,7 @@ move bid newPos@(nx, ny, nz) = do
   let pos@(x,y,z) = _pos bot
       diff = (fromIntegral nx - fromIntegral x, fromIntegral ny - fromIntegral y, fromIntegral nz - fromIntegral z)
       commands = moveCommands diff
+  lift $ printf "Moving #%d %s ==> %s\n" bid (show pos) (show newPos)
   forM_ commands $ \cmd -> do
       issue bid cmd
       step
@@ -380,17 +381,23 @@ isFilled p = do
 makeTrace :: ModelFile -> Generator a -> IO [Command]
 makeTrace model gen = do
   st <- execStateT gen =<< initState model
+  print (gsAliveBots st)
   let traces = gsTraces st
       maxLen = maximum $ map length $ elems traces
-      botsAliveAtStep step = head [bots | (s, bots) <- gsAliveBots st, s <= step]
-      botsCommandsAtStep step = map (botCommand step) [traces ! bid | bid <- botsAliveAtStep step]
+      botsAliveAtStep step = head [sort bots | (s, bots) <- gsAliveBots st, s <= step]
       botCommand step trace =
         if step < length trace
           then trace `Seq.index` step
           else Wait
---   forM_ [0 .. maxLen - 1] $ \step -> do
---     printf "step #%d: alive %s\n" step (show $ botsAliveAtStep step)
-  return $ concatMap botsCommandsAtStep [0 .. maxLen-1]
+  results <- forM [0 .. maxLen - 1] $ \step -> do
+                 let aliveBots = botsAliveAtStep step
+                 printf "step #%d: alive %s\n" step (show aliveBots) 
+                 commands <- forM aliveBots $ \bid -> do
+                               let command = botCommand step (traces ! bid)
+                               printf "  bot #%d: %s\n" bid (show command)
+                               return command
+                 return commands
+  return $ concat results
 
 neighbours :: P3 -> Generator [P3]
 neighbours p@(x, y, z) = do
