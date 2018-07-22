@@ -137,6 +137,14 @@ fillLine bid dir y z = do
         when ok $
           fill bid p
 
+dropWhileM :: Monad m => (a -> m Bool) -> [a] -> m [a]
+dropWhileM _ [] = return []
+dropWhileM pred list@(x:xs) = do
+  ok <- pred x
+  if ok
+    then dropWhileM pred xs
+    else return list
+
 threes :: [a] -> [[a]]
 threes [] = []
 threes (x:y:z:xs) = [x, y, z] : (threes xs)
