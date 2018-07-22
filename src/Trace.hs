@@ -36,6 +36,7 @@ data Command =
   | LMove ShortLinDiff ShortLinDiff
   | Fission NearDiff Word8
   | Fill NearDiff
+  | DoVoid NearDiff
   | FusionP NearDiff
   | FusionS NearDiff
   | GFill NearDiff FarDiff
@@ -140,6 +141,10 @@ instance Coded Command where
     encode nd
     putBits 2 0 (0b011 :: Int)
 
+  encode (DoVoid nd) = do
+    encode nd
+    putBits 2 0 (0b010 :: Int)
+
   encode (GFill nd fd) = do
     encode nd
     putBits 2 0 (0b001 :: Int)
@@ -193,6 +198,9 @@ instance Coded Command where
 
         | byte .&. 0b111 == 0b011
           = Fill <$> pure (testDecode [byte])
+
+        | byte .&. 0b111 == 0b010
+          = DoVoid <$> pure (testDecode [byte])
 
         | byte .&.0b111 == 0b001 = do
           {- GFill -}
