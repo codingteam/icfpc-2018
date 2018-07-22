@@ -7,10 +7,12 @@ import Data.Maybe
 import Data.Array
 import Data.Int
 import Data.List
+import qualified Data.Map.Strict as Map
 import Data.Ord
 import qualified Data.Sequence as Seq
 import Data.Sequence ((|>))
 import qualified Data.Array.BitArray as BA
+import Data.Word
 
 import Trace
 import Sim
@@ -44,7 +46,7 @@ data GeneratorState = GS {
     gsGrounded :: BA.BitArray P3, -- grounded voxels
     gsStepNumber :: Step,
     gsAliveBots :: [(Step, [AliveBot])], -- which bots are alive. Record is to be added when set of bots is changed.
-    gsBots :: Array BID BotState,
+    gsBots :: Map.Map BID BotState,
     gsTraces :: Array BID BotTrace -- Trace is to be filled with Wait if bot does nothing or is not alive.
   }
   deriving (Eq, Show)
@@ -56,7 +58,7 @@ initState :: ModelFile -> GeneratorState
 initState model = GS model Low filled grounded 0 [(0,[bid])] bots traces
   where
     bid = 0
-    bots   = array (0, maxBID) [(bid, Bot bid (0,0,0) []) | bid <- [0 .. maxBID]]
+    bots   = Map.fromList []
     traces = array (0, maxBID) [(bid, Seq.empty) | bid <- [0 .. maxBID]]
     r = mfResolution model
     filled = BA.array ((0,0,0), (r-1,r-1,r-1)) [((x,y,z), False) | x <- [0..r-1], y <- [0..r-1], z <- [0..r-1]]
@@ -72,18 +74,18 @@ getBotTrace bid = do
 -- Check that there is such bot
 checkBid :: BID -> Generator ()
 checkBid bid = do
-  bids <- gets (indices . gsBots)
+  bids <- gets (Map.keys . gsBots)
   when (bid `notElem` bids) $
       fail $ "There is currently no such bot: " ++ show bid ++ "\nCurrent bots are:\n" ++ show bids
 
 getBids :: Generator [BID]
 getBids = do
-  gets (indices . gsBots)
+  gets (Map.keys . gsBots)
 
 getBot :: BID -> Generator BotState
 getBot bid = do
   bots <- gets gsBots
-  return $ bots ! bid
+  return $ bots Map.! bid
 
 -- | Issue one command for one bot.
 issue :: BID -> Command -> Generator ()
@@ -104,9 +106,15 @@ issueFlip bid = do
   issue bid Flip
 
 -- | Issue Fission command forking a new bot taking N seeds with him from the current bot.
-issueFission :: BID -> Int -> NearDiff -> Generator ()
-issueFission bid n direction = do
-  modify $ \st -> st
+issueFission :: BID -> NearDiff -> Word8 -> Generator ()
+issueFission bid direction n = do
+  parent <- getBot bid
+  let (newBid : newBotSeeds, remainingSeeds) = splitAt (fromIntegral $ n + 1) $ _seeds parent
+      newBotPos = nearPlus (_pos parent) direction
+      parent' = parent { _seeds = remainingSeeds }
+      newBot = Bot { _bid = newBid, _pos = newBotPos, _seeds = newBotSeeds }
+  modify $ \st -> st { gsBots = foldr (\(k, v) -> Map.insert k v) (gsBots st) [(bid, parent'), (newBid, newBot)] }
+  issue bid $ Fission direction n
 
 -- | Set harmonics to target value
 setHarmonics :: BID -> Harmonics -> Generator ()
@@ -273,7 +281,7 @@ move bid newPos@(nx, ny, nz) = do
       issue bid cmd
       step
   let bot' = bot {_pos = newPos}
-  modify $ \st -> st {gsBots = gsBots st // [(bid, bot')]}
+  modify $ \st -> st {gsBots = Map.insert bid bot' $ gsBots st}
 
 isFreeInModel :: P3 -> Generator Bool
 isFreeInModel p = do
