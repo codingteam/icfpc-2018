@@ -180,15 +180,17 @@ issueFill bid nd = do
            -- lift $ printf "Filling: %s\n" (show c')
            markFilled [c']
            updateGroundedAtFill c'
-  where
-    -- This should be called each time the voxel is filled
-    -- returns True if the voxel is grounded as a result.
-    updateGroundedAtFill :: P3 -> Generator ()
-    updateGroundedAtFill p = do
-        incUngroundedCount
 
-        result <- willBeGrounded p
-        when result $ groundedHelper S.empty [p]
+-- This should be called each time the voxel is filled
+-- returns True if the voxel is grounded as a result.
+updateGroundedAtFill :: P3 -> Generator ()
+updateGroundedAtFill p = do
+    incUngroundedCount
+
+    result <- willBeGrounded p
+    when result $ groundedHelper S.empty [p]
+
+  where
 
     incUngroundedCount :: Generator ()
     incUngroundedCount = do
@@ -226,16 +228,15 @@ issueFill bid nd = do
             -- need to be checked and updated.
             groundedHelper checked' toCheck
 
-    setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
-    setGrounded bits p ok =
-      lift $ BAIO.writeArray bits p ok
+setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
+setGrounded bits p ok =
+  lift $ BAIO.writeArray bits p ok
 
-    -- mark voxels as filled by generator
-    markFilled :: [P3] -> Generator ()
-    markFilled cs = do
-      filled <- gets gsFilled
-      forM_ cs $ \p ->
-        lift $ BAIO.writeArray filled p True
+markFilled :: [P3] -> Generator ()
+markFilled cs = do
+  filled <- gets gsFilled
+  forM_ cs $ \p ->
+    lift $ BAIO.writeArray filled p True
 
 -- | Is voxel grounded?
 -- This works by definition, i.e. always returns False for non-filled voxels.
@@ -348,11 +349,16 @@ move bid newPos@(nx, ny, nz) = do
   let pos@(x,y,z) = _pos bot
       diff = (fromIntegral nx - fromIntegral x, fromIntegral ny - fromIntegral y, fromIntegral nz - fromIntegral z)
       commands = moveCommands diff
-  lift $ printf "Moving #%d %s ==> %s\n" bid (show pos) (show newPos)
+--   lift $ printf "Moving #%d %s ==> %s\n" bid (show pos) (show newPos)
   forM_ commands $ \cmd -> do
       issue bid cmd
       step
-  let bot' = bot {_pos = newPos}
+  setBotPos bid (const newPos)
+
+setBotPos :: BID -> (P3 -> P3) -> Generator ()
+setBotPos bid fn = do
+  bot <- getBot bid
+  let bot' = bot {_pos = fn (_pos bot)}
   modify $ \st -> st {gsBots = gsBots st // [(bid, bot')]}
 
 isFreeInModel :: P3 -> Generator Bool
@@ -381,7 +387,7 @@ isFilled p = do
 makeTrace :: ModelFile -> Generator a -> IO [Command]
 makeTrace model gen = do
   st <- execStateT gen =<< initState model
-  print (gsAliveBots st)
+--   print (gsAliveBots st)
   let traces = gsTraces st
       maxLen = maximum $ map length $ elems traces
       botsAliveAtStep step = head [sort bots | (s, bots) <- gsAliveBots st, s <= step]

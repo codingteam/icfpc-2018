@@ -121,6 +121,7 @@ checkSimpleLayer y = do
     r <- gets (mfResolution . gsModel)
     go (Just []) (r-1)
   where
+    go (Just []) 0 = return Nothing
     go result 0 = return result
     go (Just segs) z = do
       s <- checkSimpleLine y z
@@ -156,7 +157,7 @@ checkSimpleLine y z = do
     go x = do
       r <- lift $ gets (mfResolution . gsModel)
       st <- get
-      if x == r-1
+      if x == r
         then do
             when (sdState st == Ended) $
                 modify $ \st -> st {sdResult = True}
@@ -186,12 +187,41 @@ fillSegment bid1 bid2 y (Segment z x1 x2) = do
       pos2 = (x2, y+1, z)
       fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
       fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
-  move bid1 pos1
+      voxels = [(x,y,z) | x <- [x1..x2]]
   move bid2 pos2
+  move bid1 pos1
+--   lift $ printf "GFill: #%d @ %s, #%d @ %s\n" bid1 (show pos1) bid2 (show pos2)
+  grounded <- and <$> mapM willBeGrounded voxels
+  unless grounded $ do
+    setHarmonics bid1 High
+    step
   issue bid1 $ GFill nd fd1
   issue bid2 $ GFill nd fd2
+  markFilled voxels
+  forM_ voxels updateGroundedAtFill
+  count <- gets gsUngroundedCount
+  when (count == 0) $ do
+    setHarmonics bid1 Low
+    step
   step
   return ()
+
+fillSimpleLayer :: BID -> Word8 -> [Segment] -> Generator ()
+fillSimpleLayer bid1 y segments = do
+  issue bid1 $ SMove $ LongLinDiff Y 1
+  setBotPos bid1 $ \(x,y,z) -> (x,y+1,z)
+  step
+  bid2 <- issueFission bid1 1 (NearDiff 1 0 0)
+  step
+  forM_ segments $ \segment -> do
+    fillSegment bid1 bid2 y segment
+  setHarmonics bid1 Low
+  step
+  bot1 <- getBot bid1
+  let (x1,y1,z1) = _pos bot1
+  move bid2 (x1+1, y1, z1)
+  issueFusion bid1 bid2
+  step
 
 fillLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 fillLine bid dir y z = do
@@ -221,13 +251,18 @@ voidLine bid dir y z = do
 
 fillLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 fillLayer bid ldir y = do
-  r <- gets (mfResolution . gsModel)
-  let zs = case ldir of
-             FrontToBack -> [0 .. r-1]
-             BackToFront -> reverse [0 .. r-1]
-      dirs = cycle [LeftToRight, RightToLeft]
-  forM_ (zip zs dirs) $ \(z, dir) -> do
-    fillLine bid dir y z
+  mbSimple <- checkSimpleLayer y
+  case mbSimple of
+    Nothing -> do
+      r <- gets (mfResolution . gsModel)
+      let zs = case ldir of
+                 FrontToBack -> [0 .. r-1]
+                 BackToFront -> reverse [0 .. r-1]
+          dirs = cycle [LeftToRight, RightToLeft]
+      forM_ (zip zs dirs) $ \(z, dir) -> do
+        fillLine bid dir y z
+    Just segments -> do
+      fillSimpleLayer bid y segments
 
 voidLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 voidLayer bid ldir y = do
@@ -274,9 +309,9 @@ test3 = do
     evalStateT gen =<< initState model
   where
     gen = do
-      res1 <- checkSimpleLine 0 10
+      res1 <- checkSimpleLine 1 7
       lift $ print res1
-      res2 <- checkSimpleLayer 0
+      res2 <- checkSimpleLayer 1
       lift $ print res2
 
 test4 :: Generator ()
