@@ -159,7 +159,7 @@ nearSub (x1,y1,z1) (x2,y2,z2) =
       dy = y1-y2
       dz = z1-z2
   in  Just $ NearDiff (fromIntegral dx) (fromIntegral dy) (fromIntegral dz)
---   in  
+--   in
 --   in  if maximum [abs dx, abs dy, abs dz] == 1
 --         then Just $ NearDiff (fromIntegral dx) (fromIntegral dy) (fromIntegral dz)
 --         else Nothing
@@ -205,15 +205,10 @@ issueFill bid nd = do
           then do
             setGrounded grounded p True
 
-            resolution <- liftM mfResolution $ gets gsModel
-            let inBounds x = x >= 0 && x < resolution
+            neighbours' <- neighbours p
+            let neighbours'' = filter (\x -> S.notMember x checked') neighbours'
 
-            let neighbours =
-                  filter (\x -> S.notMember x checked') $
-                  filter (\(x, y, z) -> inBounds x && inBounds y && inBounds z)
-                      [(x+1, y, z), (x, y+1, z), (x, y, z+1),
-                       (x-1, y, z), (x, y-1, z), (x, y, z-1)]
-            groundedHelper checked' (neighbours ++ toCheck)
+            groundedHelper checked' (neighbours'' ++ toCheck)
           else
             -- p is either filled && grounded, or not filled && not grounded.
             -- Either way, it shouldn't be grounded, so its neighbours don't
@@ -228,14 +223,8 @@ issueFill bid nd = do
     check :: BAIO.IOBitArray P3 -> P3 -> Generator Bool
     check _ (_,0,_) = return True
     check grounded p@(x,y,z) = do
-          resolution <- liftM mfResolution $ gets gsModel
-          let inBounds x = x >= 0 && x < resolution
-
-          let neighbours =
-                filter (\(x, y, z) -> inBounds x && inBounds y && inBounds z)
-                    [(x+1, y, z), (x, y+1, z), (x, y, z+1),
-                     (x-1, y, z), (x, y-1, z), (x, y, z-1)]
-          neighbGrounded <- forM neighbours $ \n ->
+          neighbours' <- neighbours p
+          neighbGrounded <- forM neighbours' $ \n ->
                                 lift $ BAIO.readArray grounded n
           return $ or neighbGrounded
 
@@ -249,17 +238,10 @@ isGrounded p = do
 -- | Will voxel become grounded if we fill it?
 -- This checks if any neighbour voxel is grounded.
 willBeGrounded :: P3 -> Generator Bool
-willBeGrounded (x,y,z) = do
+willBeGrounded p@(x,y,z) = do
   grounded <- gets gsGrounded
-  let neighbours = [(x+1, y, z), (x, y+1, z), (x, y, z+1),
-                    (x-1, y, z), (x, y-1, z), (x, y, z-1)]
-  r <- gets (mfResolution . gsModel)
-  let good (nx,ny,nz) =
-        nx >= 0 && nx < r && ny >= 0 && ny < r && nz >= 0 && nz < r
-  neighbGrounded <- forM neighbours $ \n ->
-                        if good n
-                          then lift $ BAIO.readArray grounded n
-                          else return False
+  neighbours' <- neighbours p
+  neighbGrounded <- forM neighbours' $ \n -> lift $ BAIO.readArray grounded n
   return $ or neighbGrounded
 
 allAreGrounded :: Generator Bool
@@ -407,6 +389,16 @@ makeTrace model gen = do
     printf "step #%d: alive %s\n" step (show $ botsAliveAtStep step)
   return $ concatMap botsCommandsAtStep [0 .. maxLen-1]
 
+neighbours :: P3 -> Generator [P3]
+neighbours p@(x, y, z) = do
+  resolution <- gets (mfResolution . gsModel)
+  let inBounds x = x >= 0 && x < resolution
+
+  return $
+    filter (\(x, y, z) -> inBounds x && inBounds y && inBounds z)
+      [(x+1, y, z), (x, y+1, z), (x, y, z+1),
+       (x-1, y, z), (x, y-1, z), (x, y, z-1)]
+
 test1 :: Generator ()
 test1 = do
   [bid] <- getBids
@@ -426,7 +418,7 @@ test2 = do
   move bid (5, 0, 5)
   issue bid $ Fill (NearDiff 0 1 0)
   step
-  bid2 <- issueFission bid 1 (NearDiff 1 0 0) 
+  bid2 <- issueFission bid 1 (NearDiff 1 0 0)
   step
   move bid2 (5, 0, 9)
   issue bid2 $ Fill (NearDiff 0 1 0)
