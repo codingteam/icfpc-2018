@@ -161,8 +161,20 @@ fillThrees bid [l, c] = do
     (True, False)  -> fillThrees bid [l]
     (False, True)  -> fillThrees bid [c]
     (True, True)   -> do
-      fillThrees bid [l]
-      fillThrees bid [c]
+      (neighbour, _) <- findFreeNeighbour l
+      move bid neighbour
+      forM_ [l, c] $ \p -> do
+        grounded <- willBeGrounded p
+        unless grounded $
+          setHarmonics bid High
+        let (Just diff) = nearSub p neighbour
+        issueFill bid diff
+
+        count <- gets gsUngroundedCount
+        when (count == 0) $
+          setHarmonics bid Low
+
+        step
 fillThrees bid (l:c:r:line) = do
   okL <- isFilledInModel l
   if not okL
@@ -178,12 +190,29 @@ fillThrees bid (l:c:r:line) = do
           okR <- isFilledInModel r
           if not okR
             then do
-              fillThrees bid [l, c]
+              -- If these two points aren't the last in the line, it makes
+              -- sense to move to the farther so it's closer to the next
+              -- segment. Thus, we rearrange points such that we should always
+              -- to the first one.
+              let chunk = if (not.null) line then [c, l] else [l, c]
+              fillThrees bid chunk
+
               fillThrees bid line
             else do
-              fillThrees bid [l]
-              fillThrees bid [c]
-              fillThrees bid [r]
+              (neighbour, _) <- findFreeNeighbour c
+              move bid neighbour
+              forM_ [l, c, r] $ \p -> do
+                grounded <- willBeGrounded p
+                unless grounded $
+                  setHarmonics bid High
+                let (Just diff) = nearSub p neighbour
+                issueFill bid diff
+
+                count <- gets gsUngroundedCount
+                when (count == 0) $
+                  setHarmonics bid Low
+
+                step
 
               fillThrees bid line
 
