@@ -132,10 +132,36 @@ fillLine bid dir y z = do
       return ()
     Just p1 -> do
       r <- gets (mfResolution . gsModel)
-      forM_ (makeLine dir r y z) $ \p -> do
-        ok <- isFilledInModel p
-        when ok $
-          fill bid p
+      line <- dropWhileM (liftM not . isFilledInModel) (makeLine dir r y z)
+      fillThrees bid line
+
+fillThrees :: BID -> [P3] -> Generator ()
+fillThrees _   [] = return ()
+fillThrees bid [p] = do
+  ok <- isFilledInModel p
+  when ok $ do
+    (neighbour, diff) <- findFreeNeighbour p
+    let diff' = negateNear diff
+    move bid neighbour
+    grounded <- willBeGrounded p
+    unless grounded $
+      setHarmonics bid High
+    issueFill bid diff'
+
+    count <- gets gsUngroundedCount
+    when (count == 0) $
+      setHarmonics bid Low
+
+    step
+fillThrees bid [l, c] = do
+  fillThrees bid [l]
+  fillThrees bid [c]
+fillThrees bid (l:c:r:line) = do
+  fillThrees bid [l]
+  fillThrees bid [c]
+  fillThrees bid [r]
+
+  fillThrees bid line
 
 dropWhileM :: Monad m => (a -> m Bool) -> [a] -> m [a]
 dropWhileM _ [] = return []
