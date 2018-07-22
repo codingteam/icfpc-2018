@@ -62,7 +62,7 @@ initState model = do
       forM_ [0..r-1] $ \z -> do
         BAIO.writeArray grounded (x, 0, z) True
 
-    filled <- BAIO.newArray_ ((0,0,0), (r-1,r-1,r-1))
+    filled <- BAIO.newArray ((0,0,0), (r-1,r-1,r-1)) False
 
     return $ GS model Low filled grounded 0 [(0,[bid])] bots traces 0
   where
@@ -181,9 +181,10 @@ issueFill bid nd = do
     let c' = nearPlus (_pos bot) nd
     filled <- isFilled c'
     if filled
-      then fail $ "Voxel is already filled: " ++ show c'
+      then fail $ printf "Voxel is already filled: %s, filling from %s" (show c') (show $ _pos bot)
       else do
            issue bid $ Fill nd
+           -- lift $ printf "Filling: %s\n" (show c')
            markFilled [c']
            updateGroundedAtFill c'
   where

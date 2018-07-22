@@ -194,6 +194,7 @@ runTest2 path gen = do
 dumbHighSolver :: FilePath -> FilePath -> IO ()
 dumbHighSolver modelPath tracePath = do
   model <- decodeFile modelPath
+  -- printf "R: %d" (mfResolution model)
   trace <- makeTrace model $ do
                 let bid = 0
                     r = mfResolution model
@@ -205,7 +206,7 @@ dumbHighSolver modelPath tracePath = do
                 move bid (0,y,0)
                 move bid (0,0,0)
                 issue bid Halt
-  print trace
+--   print trace
   writeTrace tracePath trace
 
 dumbDestructor :: FilePath -> FilePath -> IO ()
