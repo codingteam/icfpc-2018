@@ -190,7 +190,8 @@ issueFill bid nd = do
         grounded <- gets gsGrounded
         result <- check grounded p
 
-        groundedHelper S.empty [p]
+        when result $ do
+          groundedHelper S.empty [p]
 
         return result
 
