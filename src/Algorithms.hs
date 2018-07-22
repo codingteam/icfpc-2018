@@ -14,7 +14,10 @@ import Sim
 import Generator
 import Model
 
-data Direction = LeftToRight | RightToLeft
+data LineDirection = LeftToRight | RightToLeft
+  deriving (Eq, Show)
+
+data LayerDirection = FrontToBack | BackToFront
   deriving (Eq, Show)
 
 firstGoodPoint :: Monad m => (P3 -> m Bool) -> [(P3, a)] -> m (Maybe a)
@@ -41,7 +44,7 @@ findFreeNeighbour p = do
 --     Just diff -> do
 --       return (nearPlus p diff, diff)
 
-fill :: BID -> Direction -> P3 -> Generator ()
+fill :: BID -> LineDirection -> P3 -> Generator ()
 fill bid dir p@(x,y,z) = do
     (neighbour, diff) <- findFreeNeighbour p
     let diff' = negateNear diff
@@ -56,7 +59,7 @@ fill bid dir p@(x,y,z) = do
 
 -- This does not know yet when to switch harmonics,
 -- so it should always work in High.
-voidVoxel :: BID -> Direction -> P3 -> Generator ()
+voidVoxel :: BID -> LineDirection -> P3 -> Generator ()
 voidVoxel bid dir p = do
     (neighbour, diff) <- findFreeNeighbour p
     let diff' = negateNear diff
@@ -81,19 +84,44 @@ voidVoxel bid dir p = do
 --               nonVisited = [neighbour | neighbour `S.notMember` visited]
 --           in  or [go m (S.insert neighbour visited) neighbour | neighbour <- nonVisited]
 
-makeLine :: Direction -> Resolution -> Word8 -> Word8 -> [P3]
+makeLine :: LineDirection -> Resolution -> Word8 -> Word8 -> [P3]
 makeLine dir r y z = 
   case dir of
     LeftToRight -> [(x,y,z) | x <- [0..r-1]]
     RightToLeft -> [(x,y,z) | x <- reverse [0..r-1]]
 
-selectFirstInLine :: Direction -> Word8 -> Word8 -> Generator (Maybe P3)
+selectFirstInLine :: LineDirection -> Word8 -> Word8 -> Generator (Maybe P3)
 selectFirstInLine dir y z = do
   r <- gets (mfResolution . gsModel)
   let coords = makeLine dir r y z
   firstGoodPoint isFilledInModel $ zip coords coords
 
-fillLine :: BID -> Direction -> Word8 -> Word8 -> Generator () 
+cutOne :: LongLinDiff -> (NearDiff, LongLinDiff)
+cutOne (LongLinDiff X dx) = (NearDiff (signum dx) 0 0, LongLinDiff X (dx - signum dx))
+cutOne (LongLinDiff Y dy) = (NearDiff 0 (signum dy) 0, LongLinDiff Y (dy - signum dy))
+cutOne (LongLinDiff Z dz) = (NearDiff 0 0 (signum dz), LongLinDiff Z (dz - signum dz))
+
+toFar :: LongLinDiff -> FarDiff
+toFar (LongLinDiff X dx) = FarDiff dx 0 0
+toFar (LongLinDiff Y dy) = FarDiff 0 dy 0
+toFar (LongLinDiff Z dz) = FarDiff 0 0 dz
+
+negateLong :: LongLinDiff -> LongLinDiff
+negateLong (LongLinDiff x d) = LongLinDiff x (-d)
+
+fillSegment :: BID -> LongLinDiff -> Generator ()
+fillSegment bid1 ld = do
+  let (nd, ld') = cutOne ld
+  bid2 <- issueFission bid1 1 nd 
+  step
+  issue bid2 $ SMove ld
+  step
+  issue bid1 $ GFill nd (toFar ld)
+  issue bid2 $ GFill (negateNear nd) (toFar $ negateLong ld)
+  step
+  return ()
+
+fillLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator () 
 fillLine bid dir y z = do
   mbP1 <- selectFirstInLine dir y z
   case mbP1 of
@@ -106,7 +134,7 @@ fillLine bid dir y z = do
         when ok $
           fill bid dir p
 
-voidLine :: BID -> Direction -> Word8 -> Word8 -> Generator () 
+voidLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator () 
 voidLine bid dir y z = do
   mbP1 <- selectFirstInLine dir y z
   case mbP1 of
@@ -119,10 +147,12 @@ voidLine bid dir y z = do
         when ok $
           voidVoxel bid dir p
 
-fillLayer :: BID -> Word8 -> Generator ()
-fillLayer bid y = do
+fillLayer :: BID -> LayerDirection -> Word8 -> Generator ()
+fillLayer bid ldir y = do
   r <- gets (mfResolution . gsModel)
-  let zs = [0 .. r-1] 
+  let zs = case ldir of
+             FrontToBack -> [0 .. r-1] 
+             BackToFront -> reverse [0 .. r-1] 
       dirs = cycle [LeftToRight, RightToLeft]
   forM_ (zip zs dirs) $ \(z, dir) -> do
     fillLine bid dir y z
@@ -138,8 +168,9 @@ voidLayer bid y = do
 dumbFill :: BID -> Generator ()
 dumbFill bid = do
   r <- gets (mfResolution . gsModel)
-  forM_ [0 .. r-1] $ \y -> do
-    fillLayer bid y
+  let ldirs = cycle [FrontToBack, BackToFront]
+  forM_ (zip [0 .. r-1] ldirs) $ \(y, ldir) -> do
+    fillLayer bid ldir y
 
 dumbVoid :: BID -> Generator ()
 dumbVoid bid = do
@@ -159,8 +190,12 @@ dumbHighSolver modelPath tracePath = do
   model <- decodeFile modelPath
   trace <- makeTrace model $ do
                 let bid = 0
+                    r = mfResolution model
                 -- issueFlip bid
                 dumbFill bid
+                bot <- getBot bid
+                let (x,y,z) = _pos bot
+                move bid (0,y,0)
                 move bid (0,0,0)
                 -- issueFlip bid
                 issue bid Halt
