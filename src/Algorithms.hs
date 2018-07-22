@@ -154,14 +154,38 @@ fillThrees bid [p] = do
 
     step
 fillThrees bid [l, c] = do
-  fillThrees bid [l]
-  fillThrees bid [c]
+  okL <- isFilledInModel l
+  okC <- isFilledInModel c
+  case (okL, okC) of
+    (False, False) -> return ()
+    (True, False)  -> fillThrees bid [l]
+    (False, True)  -> fillThrees bid [c]
+    (True, True)   -> do
+      fillThrees bid [l]
+      fillThrees bid [c]
 fillThrees bid (l:c:r:line) = do
-  fillThrees bid [l]
-  fillThrees bid [c]
-  fillThrees bid [r]
+  okL <- isFilledInModel l
+  if not okL
+    then fillThrees bid (c:r:line)
+    else do
+      -- invariant: l has to be filled
+      okC <- isFilledInModel c
+      if not okC
+        then do
+          fillThrees bid [l]
+          fillThrees bid (r:line)
+        else do
+          okR <- isFilledInModel r
+          if not okR
+            then do
+              fillThrees bid [l, c]
+              fillThrees bid line
+            else do
+              fillThrees bid [l]
+              fillThrees bid [c]
+              fillThrees bid [r]
 
-  fillThrees bid line
+              fillThrees bid line
 
 dropWhileM :: Monad m => (a -> m Bool) -> [a] -> m [a]
 dropWhileM _ [] = return []
