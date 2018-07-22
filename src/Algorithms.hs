@@ -172,11 +172,32 @@ dumbDestructor modelPath tracePath = do
   model <- decodeFile modelPath
   trace <- makeTrace model $ do
                 let bid = 0
+                r <- gets (mfResolution . gsModel)
+                move bid (r-1,r-1,r-1)
                 setHarmonics bid High
                 dumbVoid bid
                 move bid (0,0,0)
                 setHarmonics bid Low
                 issue bid Halt
   print trace
+  writeTrace tracePath trace
+
+dumbReconstructor :: FilePath -> FilePath -> FilePath -> IO ()
+dumbReconstructor srcPath dstPath tracePath = do
+  srcModel <- decodeFile srcPath
+  dstModel <- decodeFile dstPath
+  trace <- makeTrace srcModel $ do
+                let bid = 0
+                r <- gets (mfResolution . gsModel)
+                move bid (r-1,r-1,r-1)
+                setHarmonics bid High
+                dumbVoid bid
+                setHarmonics bid Low
+                modify $ \st -> st {gsModel = dstModel}
+                let bid = 0
+                dumbFill bid
+                setHarmonics bid Low
+                move bid (0,0,0)
+                issue bid Halt
   writeTrace tracePath trace
 
