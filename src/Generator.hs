@@ -256,8 +256,7 @@ allAreGrounded = do
   filledMatrix <- gets gsFilled
   let filledIdxs = [idx | idx <- BA.indices filledMatrix, filledMatrix BA.! idx]
   grounded <- gets gsGrounded
-  res <- forM filledIdxs $ \p ->
-             lift $ BAIO.readArray grounded p
+  res <- mapM Generator.isGrounded filledIdxs
   return $ and res
 
 -- | Switch to the next step.
