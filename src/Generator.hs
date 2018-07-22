@@ -52,7 +52,7 @@ data GeneratorState = GS {
   }
 
 maxBID :: BID
-maxBID = 20
+maxBID = 40
 
 initState :: ModelFile -> IO GeneratorState
 initState model = do
