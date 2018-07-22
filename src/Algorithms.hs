@@ -53,8 +53,11 @@ fill bid dir p@(x,y,z) = do
     unless grounded $
       setHarmonics bid High
     issueFill bid diff'
-    when grounded $
+
+    count <- gets gsUngroundedCount
+    when (count == 0) $
       setHarmonics bid Low
+
     step
 
 -- This does not know yet when to switch harmonics,
@@ -85,7 +88,7 @@ voidVoxel bid dir p = do
 --           in  or [go m (S.insert neighbour visited) neighbour | neighbour <- nonVisited]
 
 makeLine :: LineDirection -> Resolution -> Word8 -> Word8 -> [P3]
-makeLine dir r y z = 
+makeLine dir r y z =
   case dir of
     LeftToRight -> [(x,y,z) | x <- [0..r-1]]
     RightToLeft -> [(x,y,z) | x <- reverse [0..r-1]]
@@ -112,7 +115,7 @@ negateLong (LongLinDiff x d) = LongLinDiff x (-d)
 fillSegment :: BID -> LongLinDiff -> Generator ()
 fillSegment bid1 ld = do
   let (nd, ld') = cutOne ld
-  bid2 <- issueFission bid1 1 nd 
+  bid2 <- issueFission bid1 1 nd
   step
   issue bid2 $ SMove ld
   step
@@ -121,7 +124,7 @@ fillSegment bid1 ld = do
   step
   return ()
 
-fillLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator () 
+fillLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 fillLine bid dir y z = do
   mbP1 <- selectFirstInLine dir y z
   case mbP1 of
@@ -134,7 +137,7 @@ fillLine bid dir y z = do
         when ok $
           fill bid dir p
 
-voidLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator () 
+voidLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 voidLine bid dir y z = do
   mbP1 <- selectFirstInLine dir y z
   case mbP1 of
@@ -151,8 +154,8 @@ fillLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 fillLayer bid ldir y = do
   r <- gets (mfResolution . gsModel)
   let zs = case ldir of
-             FrontToBack -> [0 .. r-1] 
-             BackToFront -> reverse [0 .. r-1] 
+             FrontToBack -> [0 .. r-1]
+             BackToFront -> reverse [0 .. r-1]
       dirs = cycle [LeftToRight, RightToLeft]
   forM_ (zip zs dirs) $ \(z, dir) -> do
     fillLine bid dir y z
@@ -161,8 +164,8 @@ voidLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 voidLayer bid ldir y = do
   r <- gets (mfResolution . gsModel)
   let zs = case ldir of
-             FrontToBack -> [0 .. r-1] 
-             BackToFront -> reverse [0 .. r-1] 
+             FrontToBack -> [0 .. r-1]
+             BackToFront -> reverse [0 .. r-1]
       dirs = cycle [LeftToRight, RightToLeft]
   forM_ (zip zs dirs) $ \(z, dir) -> do
     voidLine bid dir y z
@@ -180,7 +183,7 @@ dumbVoid bid = do
   let ldirs = cycle [FrontToBack, BackToFront]
   forM_ (zip (reverse [0 .. r-1]) ldirs) $ \(y, ldir) -> do
     voidLayer bid ldir y
-  
+
 runTest2 :: FilePath -> Generator () -> IO ()
 runTest2 path gen = do
   model <- decodeFile path
