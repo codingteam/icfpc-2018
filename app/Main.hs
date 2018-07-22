@@ -23,4 +23,5 @@ main = do
   case args of
     ["display", file] -> displayModelFile file
     ["gentrace-dummy", infile, outfile] -> dumbHighSolver infile outfile
+    ["deconstruct", infile, outfile] -> dumbDestructor infile outfile
     _ -> fail "unknown command"

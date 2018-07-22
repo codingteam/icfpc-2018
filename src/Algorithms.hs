@@ -54,6 +54,16 @@ fill bid dir p@(x,y,z) = do
       setHarmonics bid Low
     step
 
+-- This does not know yet when to switch harmonics,
+-- so it should always work in High.
+voidVoxel :: BID -> Direction -> P3 -> Generator ()
+voidVoxel bid dir p = do
+    (neighbour, diff) <- findFreeNeighbour p
+    let diff' = negateNear diff
+    move bid neighbour
+    issue bid $ DoVoid diff'
+    step
+
 -- This would be too slow
 -- isGrounded :: P3 -> Generator Bool
 -- isGrounded p = do
@@ -96,6 +106,19 @@ fillLine bid dir y z = do
         when ok $
           fill bid dir p
 
+voidLine :: BID -> Direction -> Word8 -> Word8 -> Generator () 
+voidLine bid dir y z = do
+  mbP1 <- selectFirstInLine dir y z
+  case mbP1 of
+    Nothing -> -- fail $ printf "dont know where to start line: Y=%d, Z=%d" y z
+      return ()
+    Just p1 -> do
+      r <- gets (mfResolution . gsModel)
+      forM_ (makeLine dir r y z) $ \p -> do
+        ok <- isFilledInModel p
+        when ok $
+          voidVoxel bid dir p
+
 fillLayer :: BID -> Word8 -> Generator ()
 fillLayer bid y = do
   r <- gets (mfResolution . gsModel)
@@ -104,11 +127,25 @@ fillLayer bid y = do
   forM_ (zip zs dirs) $ \(z, dir) -> do
     fillLine bid dir y z
 
+voidLayer :: BID -> Word8 -> Generator ()
+voidLayer bid y = do
+  r <- gets (mfResolution . gsModel)
+  let zs = [0 .. r-1] 
+      dirs = cycle [LeftToRight, RightToLeft]
+  forM_ (zip zs dirs) $ \(z, dir) -> do
+    voidLine bid dir y z
+
 dumbFill :: BID -> Generator ()
 dumbFill bid = do
   r <- gets (mfResolution . gsModel)
   forM_ [0 .. r-1] $ \y -> do
     fillLayer bid y
+
+dumbVoid :: BID -> Generator ()
+dumbVoid bid = do
+  r <- gets (mfResolution . gsModel)
+  forM_ (reverse [0 .. r-1]) $ \y -> do
+    voidLayer bid y
   
 runTest2 :: FilePath -> Generator () -> IO ()
 runTest2 path gen = do
@@ -126,6 +163,19 @@ dumbHighSolver modelPath tracePath = do
                 dumbFill bid
                 move bid (0,0,0)
                 -- issueFlip bid
+                issue bid Halt
+  print trace
+  writeTrace tracePath trace
+
+dumbDestructor :: FilePath -> FilePath -> IO ()
+dumbDestructor modelPath tracePath = do
+  model <- decodeFile modelPath
+  trace <- makeTrace model $ do
+                let bid = 0
+                setHarmonics bid High
+                dumbVoid bid
+                move bid (0,0,0)
+                setHarmonics bid Low
                 issue bid Halt
   print trace
   writeTrace tracePath trace
