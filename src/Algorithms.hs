@@ -7,6 +7,7 @@ import Data.Word
 import Data.Binary (decodeFile)
 import Text.Printf
 import qualified Data.Array.BitArray as BA
+import qualified Data.Array.BitArray.IO as BAIO
 import qualified Data.Set as S
 
 import Trace
@@ -44,6 +45,13 @@ findFreeNeighbour p = do
 --     Just diff -> do
 --       return (nearPlus p diff, diff)
 
+isEverythingGrounded :: Generator Bool
+isEverythingGrounded = do
+  grounded <- gets gsGrounded
+  filled <- gets gsFilled
+  cmp <- lift $ BAIO.zipWith (==) grounded filled
+  lift $ BAIO.and cmp
+
 fill :: BID -> LineDirection -> P3 -> Generator ()
 fill bid dir p@(x,y,z) = do
     (neighbour, diff) <- findFreeNeighbour p
@@ -53,7 +61,8 @@ fill bid dir p@(x,y,z) = do
     unless grounded $
       setHarmonics bid High
     issueFill bid diff'
-    when grounded $
+    ok <- isEverythingGrounded
+    when ok $
       setHarmonics bid Low
     step
 
