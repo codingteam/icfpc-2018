@@ -114,15 +114,15 @@ issueFission bid n direction = do
   when (null (_seeds bot1)) $
     fail $ "Bot does not have seeds for fission: " ++ show bid
   let (newBid : srcSeeds) = sort (_seeds bot1)
-      bot1' = bot1 {_seeds = take n srcSeeds}
+      bot1' = bot1 {_seeds = drop n srcSeeds }
       bot2' = bot1 {
                 _bid = newBid,
-                _seeds = drop n srcSeeds,
+                _seeds = take n srcSeeds,
                 _pos = nearPlus (_pos bot1) direction
               }
   modify $ \st -> st {
       gsBots = gsBots st // [(bid, bot1'), (newBid, bot2')],
-      gsAliveBots = (gsStepNumber st, newBid : aliveBids) : gsAliveBots st
+      gsAliveBots = (gsStepNumber st + 1, newBid : aliveBids) : gsAliveBots st
     }
   issue bid (Fission direction $ fromIntegral n)
   return newBid
@@ -136,10 +136,12 @@ issueFusion bid1 bid2 = do
     Nothing -> fail $ printf "Bots are too far: #%d %s, #%d %s"
                           bid1 (show $ _pos bot1) bid2 (show $ _pos bot2)
     Just nd -> do
-      issue bid2 $ FusionP (negateNear nd)
-      issue bid1 $ FusionS nd
+      issue bid1 $ FusionP (negateNear nd)
+      issue bid2 $ FusionS nd
+      let bot1' = bot1 {_seeds = sort $ bid2 : (_seeds bot1 ++ _seeds bot2)}
       modify $ \st -> st {
-                        gsAliveBots = (gsStepNumber st + 1, Data.List.delete bid2 aliveBids) : gsAliveBots st
+                        gsAliveBots = (gsStepNumber st + 1, Data.List.delete bid2 aliveBids) : gsAliveBots st,
+                        gsBots = gsBots st // [(bid1, bot1')]
                       }
 
 -- | Set harmonics to target value
@@ -180,15 +182,17 @@ issueFill bid nd = do
            -- lift $ printf "Filling: %s\n" (show c')
            markFilled [c']
            updateGroundedAtFill c'
-  where
-    -- This should be called each time the voxel is filled
-    -- returns True if the voxel is grounded as a result.
-    updateGroundedAtFill :: P3 -> Generator ()
-    updateGroundedAtFill p = do
-        incUngroundedCount
 
-        result <- willBeGrounded p
-        when result $ groundedHelper S.empty [p]
+-- This should be called each time the voxel is filled
+-- returns True if the voxel is grounded as a result.
+updateGroundedAtFill :: P3 -> Generator ()
+updateGroundedAtFill p = do
+    incUngroundedCount
+
+    result <- willBeGrounded p
+    when result $ groundedHelper S.empty [p]
+
+  where
 
     incUngroundedCount :: Generator ()
     incUngroundedCount = do
@@ -226,16 +230,15 @@ issueFill bid nd = do
             -- need to be checked and updated.
             groundedHelper checked' toCheck
 
-    setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
-    setGrounded bits p ok =
-      lift $ BAIO.writeArray bits p ok
+setGrounded :: BAIO.IOBitArray P3 -> P3 -> Bool -> Generator ()
+setGrounded bits p ok =
+  lift $ BAIO.writeArray bits p ok
 
-    -- mark voxels as filled by generator
-    markFilled :: [P3] -> Generator ()
-    markFilled cs = do
-      filled <- gets gsFilled
-      forM_ cs $ \p ->
-        lift $ BAIO.writeArray filled p True
+markFilled :: [P3] -> Generator ()
+markFilled cs = do
+  filled <- gets gsFilled
+  forM_ cs $ \p ->
+    lift $ BAIO.writeArray filled p True
 
 -- | Is voxel grounded?
 -- This works by definition, i.e. always returns False for non-filled voxels.
@@ -348,10 +351,16 @@ move bid newPos@(nx, ny, nz) = do
   let pos@(x,y,z) = _pos bot
       diff = (fromIntegral nx - fromIntegral x, fromIntegral ny - fromIntegral y, fromIntegral nz - fromIntegral z)
       commands = moveCommands diff
+--   lift $ printf "Moving #%d %s ==> %s\n" bid (show pos) (show newPos)
   forM_ commands $ \cmd -> do
       issue bid cmd
       step
-  let bot' = bot {_pos = newPos}
+  setBotPos bid (const newPos)
+
+setBotPos :: BID -> (P3 -> P3) -> Generator ()
+setBotPos bid fn = do
+  bot <- getBot bid
+  let bot' = bot {_pos = fn (_pos bot)}
   modify $ \st -> st {gsBots = gsBots st // [(bid, bot')]}
 
 isFreeInModel :: P3 -> Generator Bool
@@ -380,17 +389,23 @@ isFilled p = do
 makeTrace :: ModelFile -> Generator a -> IO [Command]
 makeTrace model gen = do
   st <- execStateT gen =<< initState model
+--   print (gsAliveBots st)
   let traces = gsTraces st
       maxLen = maximum $ map length $ elems traces
-      botsAliveAtStep step = head [bots | (s, bots) <- gsAliveBots st, s <= step]
-      botsCommandsAtStep step = map (botCommand step) [traces ! bid | bid <- botsAliveAtStep step]
+      botsAliveAtStep step = head [sort bots | (s, bots) <- gsAliveBots st, s <= step]
       botCommand step trace =
         if step < length trace
           then trace `Seq.index` step
           else Wait
---   forM_ [0 .. maxLen - 1] $ \step -> do
---     printf "step #%d: alive %s\n" step (show $ botsAliveAtStep step)
-  return $ concatMap botsCommandsAtStep [0 .. maxLen-1]
+  results <- forM [0 .. maxLen - 1] $ \step -> do
+                 let aliveBots = botsAliveAtStep step
+                 printf "step #%d: alive %s\n" step (show aliveBots) 
+                 commands <- forM aliveBots $ \bid -> do
+                               let command = botCommand step (traces ! bid)
+                               printf "  bot #%d: %s\n" bid (show command)
+                               return command
+                 return commands
+  return $ concat results
 
 neighbours :: P3 -> Generator [P3]
 neighbours p@(x, y, z) = do
