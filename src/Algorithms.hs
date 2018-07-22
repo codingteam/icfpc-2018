@@ -157,10 +157,12 @@ fillLayer bid ldir y = do
   forM_ (zip zs dirs) $ \(z, dir) -> do
     fillLine bid dir y z
 
-voidLayer :: BID -> Word8 -> Generator ()
-voidLayer bid y = do
+voidLayer :: BID -> LayerDirection -> Word8 -> Generator ()
+voidLayer bid ldir y = do
   r <- gets (mfResolution . gsModel)
-  let zs = [0 .. r-1] 
+  let zs = case ldir of
+             FrontToBack -> [0 .. r-1] 
+             BackToFront -> reverse [0 .. r-1] 
       dirs = cycle [LeftToRight, RightToLeft]
   forM_ (zip zs dirs) $ \(z, dir) -> do
     voidLine bid dir y z
@@ -175,8 +177,9 @@ dumbFill bid = do
 dumbVoid :: BID -> Generator ()
 dumbVoid bid = do
   r <- gets (mfResolution . gsModel)
-  forM_ (reverse [0 .. r-1]) $ \y -> do
-    voidLayer bid y
+  let ldirs = cycle [FrontToBack, BackToFront]
+  forM_ (zip (reverse [0 .. r-1]) ldirs) $ \(y, ldir) -> do
+    voidLayer bid ldir y
   
 runTest2 :: FilePath -> Generator () -> IO ()
 runTest2 path gen = do
