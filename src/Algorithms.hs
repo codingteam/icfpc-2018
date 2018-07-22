@@ -195,11 +195,12 @@ dumbHighSolver modelPath tracePath = do
                 let bid = 0
                     r = mfResolution model
                 dumbFill bid
+                setHarmonics bid Low
+                step
                 bot <- getBot bid
                 let (x,y,z) = _pos bot
                 move bid (0,y,0)
                 move bid (0,0,0)
-                setHarmonics bid Low
                 issue bid Halt
   print trace
   writeTrace tracePath trace
@@ -212,9 +213,10 @@ dumbDestructor modelPath tracePath = do
                 r <- gets (mfResolution . gsModel)
                 move bid (r-1,r-1,r-1)
                 setHarmonics bid High
+                step
                 dumbVoid bid
-                move bid (0,0,0)
                 setHarmonics bid Low
+                move bid (0,0,0)
                 issue bid Halt
   print trace
   writeTrace tracePath trace
