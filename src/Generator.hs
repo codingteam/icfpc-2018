@@ -253,6 +253,7 @@ isGrounded p = do
 -- | Will voxel become grounded if we fill it?
 -- This checks if any neighbour voxel is grounded.
 willBeGrounded :: P3 -> Generator Bool
+willBeGrounded (_, 0, _) = return True
 willBeGrounded p@(x,y,z) = do
   neighbours' <- neighbours p
   neighbours'' <- filterM isFilled neighbours'
