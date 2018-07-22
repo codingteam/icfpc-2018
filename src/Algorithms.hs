@@ -137,6 +137,11 @@ fillLine bid dir y z = do
         when ok $
           fill bid dir p
 
+threes :: [a] -> [[a]]
+threes [] = []
+threes (x:y:z:xs) = [x, y, z] : (threes xs)
+threes list = [list]
+
 voidLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 voidLine bid dir y z = do
   mbP1 <- selectFirstInLine dir y z
