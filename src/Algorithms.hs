@@ -298,14 +298,11 @@ fillSegment bid1 bid2 y (Segment z subsegments) = mapM_ fillSubsegment subsegmen
       -- we know that bot1 is always at left of bot2.
       case (dx1 > 0, dx2 > 0) of
         (True, True) -> do -- move both to right. Move rightmost bot first.
-          move bid2 init2
-          move bid1 init1
+          moveAll [bid2, bid1] [init2, init1]
         (False, False) -> do -- move both to left. Move leftmost bot first.
-          move bid1 init1
-          move bid2 init2
+          moveAll [bid1, bid2] [init1, init2]
         _ -> do -- no matter
-          move bid1 init1
-          move bid2 init2
+          moveAll [bid1, bid2] [init1, init2]
 
 voidSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
 voidSegment bid1 bid2 y (Segment z subsegments) = mapM_ voidSubsegment subsegments
@@ -336,14 +333,11 @@ voidSegment bid1 bid2 y (Segment z subsegments) = mapM_ voidSubsegment subsegmen
       -- we know that bot1 is always at left of bot2.
       case (dx1 > 0, dx2 > 0) of
         (True, True) -> do -- move both to right. Move rightmost bot first.
-          move bid2 init2
-          move bid1 init1
+          moveAll [bid2, bid1] [init2, init1]
         (False, False) -> do -- move both to left. Move leftmost bot first.
-          move bid1 init1
-          move bid2 init2
+          moveAll [bid1, bid2] [init1, init2]
         _ -> do -- no matter
-          move bid1 init1
-          move bid2 init2
+          moveAll [bid1, bid2] [init1, init2]
 
 fillRectangle :: BID -> Word8 -> Rectangle -> Generator ()
 fillRectangle bid1 y (Rectangle z1 z2 x1 x2) = do

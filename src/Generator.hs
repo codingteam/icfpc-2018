@@ -385,6 +385,30 @@ move bid newPos@(nx, ny, nz) = do
       step
   setBotPos bid (const newPos)
 
+-- | Move all bots to desired positions.
+moveAll :: [BID] -> [P3] -> Generator ()
+moveAll bids newPoss
+  | bids == sort bids = do
+      commands <- do
+          forM (zip bids newPoss) $ \(bid, newPos@(nx,ny,nz)) -> do
+            bot <- getBot bid
+            let pos@(x,y,z) = _pos bot
+                diff = (fromIntegral nx - fromIntegral x, fromIntegral ny - fromIntegral y, fromIntegral nz - fromIntegral z)
+                commands = moveCommands diff
+            return commands
+      let maxLen = maximum $ map length commands
+          fill list = if length list == maxLen
+                        then list
+                        else list ++ replicate (maxLen - length list) Wait
+          filledCommands = map fill commands
+      forM_ (transpose filledCommands) $ \commandsPerBot ->
+        forM_ (zip3 bids newPoss commandsPerBot) $ \(bid, newPos, command) -> do
+          issue bid command
+          setBotPos bid (const newPos)
+      step
+  | otherwise = forM_ (zip bids newPoss) $ \(bid, newPos) ->
+                    move bid newPos
+
 setBotPos :: BID -> (P3 -> P3) -> Generator ()
 setBotPos bid fn = do
   bot <- getBot bid
