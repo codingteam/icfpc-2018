@@ -802,3 +802,85 @@ dumbReconstructor srcPath dstPath tracePath = do
                 issue bid Halt
   writeTrace tracePath trace
 
+solve19 :: Generator ()
+solve19 = do
+  let bid1 = 0
+  move bid1 (0, 0, 1)
+  bid2 <- issueFission bid1 1 (NearDiff 1 0 0)
+  step
+  move bid2 (29, 0, 1)
+  bid3 <- issueFission bid1 1 (NearDiff 0 0 1)
+  step
+  move bid3 (0, 0, 28)
+  bid4 <- issueFission bid1 1 (NearDiff 1 0 0)
+  step
+  move bid4 (29, 0, 28)
+
+  bid5 <- issueFission bid1 1 (NearDiff 0 1 0)
+  step
+  move bid5 (0, 29, 1)
+  bid6 <- issueFission bid1 1 (NearDiff 0 1 0)
+  step
+  move bid6 (29, 29, 1)
+  bid7 <- issueFission bid1 1 (NearDiff 0 1 0)
+  step
+  move bid7 (0, 29, 28)
+  bid8 <- issueFission bid1 1 (NearDiff 1 0 0)
+  step
+  move bid8 (29, 29, 28)
+
+  let nd1 = NearDiff 1 0 0
+      nd2 = NearDiff (-1) 0 0
+      nd3 = nd1
+      nd4 = nd2
+      nd5 = nd1
+      nd6 = nd2
+      nd7 = nd1
+      nd8 = nd2
+      
+      fd1 = FarDiff 28 28 28
+      fd2 = FarDiff (-28) 28 28
+      fd3 = FarDiff 28 28 (-28)
+      fd4 = FarDiff (-28) 28 (-28)
+
+      fd5 = FarDiff 28 (-28) 28
+      fd6 = FarDiff (-28) (-28) 28
+      fd7 = FarDiff 28 (-28) (-28)
+      fd8 = FarDiff (-28) (-28) (-28)
+
+  issue bid1 $ GFill nd1 fd1
+  issue bid2 $ GFill nd2 fd2
+  issue bid3 $ GFill nd3 fd3
+  issue bid4 $ GFill nd4 fd4
+  issue bid5 $ GFill nd5 fd5
+  issue bid6 $ GFill nd6 fd6
+  issue bid7 $ GFill nd7 fd7
+  issue bid8 $ GFill nd8 fd8
+  step
+
+  move bid5 (0, 1, 1)
+  issueFusion bid1 bid5
+  step
+  move bid6 (29, 1, 1) 
+  issueFusion bid2 bid6
+  step
+  move bid7 (0, 1, 28)
+  issueFusion bid3 bid7
+  step
+  move bid8 (29, 1, 28)
+  issueFusion bid4 bid8
+  step
+
+  move bid3 (0, 0, 2)
+  issueFusion bid1 bid3
+  step
+  move bid4 (29, 0, 2)
+  issueFusion bid2 bid4
+  step
+  move bid2 (29, 0, 0)
+  move bid2 (0, 0, 0)
+  issueFusion bid1 bid2
+  step
+  move bid1 (0, 0, 0)
+  issue bid1 Halt
+
