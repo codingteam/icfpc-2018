@@ -1,16 +1,17 @@
-
+{-# LANGUAGE ViewPatterns #-}
 module Generator where
 
 import Control.Monad
 import Control.Monad.State
 import Data.Maybe
 import Data.Array
+import Data.Array.IArray (amap)
 import Data.Int
 import Data.List
 import Data.Ord
 import qualified Data.Sequence as Seq
 import qualified Data.Set as S
-import Data.Sequence ((|>))
+import Data.Sequence ((|>), viewr, ViewR (..))
 import qualified Data.Array.BitArray as BA
 import qualified Data.Array.BitArray.IO as BAIO
 import Text.Printf
@@ -290,7 +291,16 @@ step = do
                            then Just (bid, trace |> Wait)
                            else Nothing
     let traces' = traces // updates
-    modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
+        allAreWaiting = all (== Wait) [trace `Seq.index` n | trace <- elems traces']
+
+    if allAreWaiting
+      then do
+            let traces'' = amap cut traces'
+                cut (viewr -> t :> _) = t
+                cut t = t
+            lift $ printf "WARN: all bots are waiting at step #%d+1. Will not do step.\n" n
+            modify $ \st -> st {gsTraces = traces''}
+      else  modify $ \st -> st {gsStepNumber = n', gsTraces = traces'}
 
 subtractCmd :: P3d -> Command -> P3d
 subtractCmd (dx, dy, dz) (SMove (LongLinDiff X dx1)) = (dx-(fromIntegral dx1), dy, dz)
