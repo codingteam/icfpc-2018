@@ -49,7 +49,11 @@ evalCmd (GFill _ (FarDiff dx dy dz)) =
       dy' = fromIntegral $ 1 + (abs dy)
       dz' = fromIntegral $ 1 + (abs dz)
   in  return $ (dx' * dy' * dz') * 6 -- For now we only can produce sequences of 2 GFill's. So * 12 / 2.
-evalCmd (GVoid _ _) = fail "GVoid is not supported yet"
+evalCmd (GVoid _ (FarDiff dx dy dz)) =
+  let dx' = fromIntegral $ 1 + (abs dx)
+      dy' = fromIntegral $ 1 + (abs dy)
+      dz' = fromIntegral $ 1 + (abs dz)
+  in  return $ negate $ (dx' * dy' * dz') * 6 -- For now we only can produce sequences of 2 GVoid's. So * 12 / 2.
 
 getCommand :: Eval (Maybe Command)
 getCommand = do
