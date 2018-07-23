@@ -237,6 +237,42 @@ fillSegment bid1 bid2 y (Segment z x1 x2) = do
           move bid1 init1
           move bid2 init2
 
+voidSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
+voidSegment bid1 bid2 y (Segment z x1 x2) = do
+    let nd = NearDiff 0 (-1) 0
+        pos1 = (x1, y+1, z)
+        pos2 = (x2, y+1, z)
+        fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
+        fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
+        voxels = [(x,y,z) | x <- [x1..x2]]
+    initial pos1 pos2
+    issue bid1 $ GVoid nd fd1
+    issue bid2 $ GVoid nd fd2
+    step
+    markVoid voxels
+
+    return ()
+  where
+    initial init1 init2 = do
+      bot1 <- getBot bid1
+      bot2 <- getBot bid2
+      let (sx1,_,_) = _pos bot1
+          (sx2,_,_) = _pos bot2
+          -- if dx1 > 0 then we have to move bot1 to the right
+          dx1 = fromIntegral x1 - fromIntegral sx1 :: Int
+          dx2 = fromIntegral x2 - fromIntegral sx2 :: Int
+      -- we know that bot1 is always at left of bot2.
+      case (dx1 > 0, dx2 > 0) of
+        (True, True) -> do -- move both to right. Move rightmost bot first.
+          move bid2 init2
+          move bid1 init1
+        (False, False) -> do -- move both to left. Move leftmost bot first.
+          move bid1 init1
+          move bid2 init2
+        _ -> do -- no matter
+          move bid1 init1
+          move bid2 init2
+
 fillSimpleLayer :: BID -> Word8 -> [Segment] -> Generator ()
 fillSimpleLayer bid1 y segments = do
   issue bid1 $ SMove $ LongLinDiff Y 1
@@ -253,6 +289,36 @@ fillSimpleLayer bid1 y segments = do
   move bid2 (x1+1, y1, z1)
   issueFusion bid1 bid2
   step
+
+voidSimpleLayer :: BID -> Word8 -> [Segment] -> Generator ()
+voidSimpleLayer bid1 y segments = do
+    setHarmonics bid1 High
+    step
+    initial
+    bid2 <- issueFission bid1 1 (NearDiff 1 0 0)
+    step
+    forM_ segments $ \segment -> do
+      voidSegment bid1 bid2 y segment
+    bot1 <- getBot bid1
+    let (x1,y1,z1) = _pos bot1
+    move bid2 (x1+1, y1, z1)
+    issueFusion bid1 bid2
+    step
+    setHarmonics bid1 Low
+    step
+  where
+    initial = do
+      r <- gets (mfResolution . gsModel)
+      bot1 <- getBot bid1
+      let (x1,y1,z1) = _pos bot1
+      when (y1 < r-1) $ do
+        issue bid1 $ SMove $ LongLinDiff Y 1
+        setBotPos bid1 $ \(x,y,z) -> (x,y+1,z)
+        step
+      when (x1 == r-1) $ do
+        issue bid1 $ SMove $ LongLinDiff X (-1)
+        setBotPos bid1 $ \(x,y,z) -> (x-1,y,z)
+        step
 
 fillLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 fillLine bid dir y z = do
@@ -389,13 +455,18 @@ fillLayer bid ldir y = do
 
 voidLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 voidLayer bid ldir y = do
-  r <- gets (mfResolution . gsModel)
-  let zs = case ldir of
-             FrontToBack -> [0 .. r-1]
-             BackToFront -> reverse [0 .. r-1]
-      dirs = cycle [LeftToRight, RightToLeft]
-  forM_ (zip zs dirs) $ \(z, dir) -> do
-    voidLine bid dir y z
+  mbSimple <- checkSimpleLayer y
+  case mbSimple of
+    Nothing -> do
+      r <- gets (mfResolution . gsModel)
+      let zs = case ldir of
+                 FrontToBack -> [0 .. r-1]
+                 BackToFront -> reverse [0 .. r-1]
+          dirs = cycle [LeftToRight, RightToLeft]
+      forM_ (zip zs dirs) $ \(z, dir) -> do
+        voidLine bid dir y z
+    Just segments -> do
+      voidSimpleLayer bid y segments
 
 dumbFill :: BID -> Generator ()
 dumbFill bid = do

@@ -252,6 +252,12 @@ markFilled cs = do
   forM_ cs $ \p ->
     lift $ BAIO.writeArray filled p True
 
+markVoid :: [P3] -> Generator ()
+markVoid cs = do
+  filled <- gets gsFilled
+  forM_ cs $ \p ->
+    lift $ BAIO.writeArray filled p False
+
 -- | Is voxel grounded?
 -- This works by definition, i.e. always returns False for non-filled voxels.
 isGrounded :: P3 -> Generator Bool
