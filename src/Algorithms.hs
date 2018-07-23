@@ -114,7 +114,7 @@ toFar (LongLinDiff Z dz) = FarDiff 0 0 dz
 negateLong :: LongLinDiff -> LongLinDiff
 negateLong (LongLinDiff x d) = LongLinDiff x (-d)
 
-data Segment = Segment Word8 Word8 Word8 -- Z, first filled X, last filled X
+data Segment = Segment Word8 [(Word8, Word8)] -- Z, first filled X, last filled X
   deriving (Eq, Show)
 
 checkSimpleLayer :: Word8 -> Generator (Maybe [Segment])
@@ -153,8 +153,8 @@ checkSimpleLine y z = do
             let start = fromJust (sdStart st)
                 end   = fromJust (sdEnd st)
                 len   = end - start
-            in  if len > 3 && len < 30
-                  then return $ SingleSegment $ Segment z start end
+            in  if len > 3
+                  then return $ SingleSegment $ Segment z $ split [] start end
                   else return BadSegmenting
       NewSegment -> return BadSegmenting
       NotStarted -> return NoSegments
@@ -183,41 +183,50 @@ checkSimpleLine y z = do
             (Ended, True) -> modify $ \st -> st {sdState = NewSegment}
             (Ended, False) -> go (x+1)
 
+    split :: [(Word8, Word8)] -> Word8 -> Word8 -> [(Word8, Word8)]
+    split result start end
+      | end - start < 30 = result ++ [(start, end)]
+      | otherwise =
+        let x1 = start + 29
+        in  split (result ++ [(start, x1)]) (x1+1) end
+
 fillSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
-fillSegment bid1 bid2 y (Segment z x1 x2) = do
-    let nd = NearDiff 0 (-1) 0
-        pos1 = (x1, y+1, z)
-        pos2 = (x2, y+1, z)
-        fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
-        fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
-        voxels = [(x,y,z) | x <- [x1..x2]]
-    initial pos1 pos2
-  --   lift $ printf "GFill: #%d @ %s, #%d @ %s\n" bid1 (show pos1) bid2 (show pos2)
-    grounded <- and <$> mapM willBeGrounded voxels
-    unless grounded $ do
-  --     lift $ printf "layer #%d, Z %d: go High\n" y z
-      setHarmonics bid1 High
-      step
-    issue bid1 $ GFill nd fd1
-    issue bid2 $ GFill nd fd2
-    step
-    markFilled voxels
-    forM_ voxels updateGroundedAtFill
-
-  --   r <- gets (mfResolution . gsModel)
-  --   filled <- gets gsFilled
-  --   matrix <- lift $ BAIO.freeze filled
-  --   lift $ printf "After layer #%d, Z %d:\n%s"
-  --           y z (displayLayer r matrix y)
-
-    count <- gets gsUngroundedCount
-    when (count == 0) $ do
-  --     lift $ printf "layer #%d, Z %d: go Low\n" y z
-      setHarmonics bid1 Low
-      step
-    return ()
+fillSegment bid1 bid2 y (Segment z subsegments) = mapM_ fillSubsegment subsegments
   where
-    initial init1 init2 = do
+    fillSubsegment (x1, x2) = do
+      let nd = NearDiff 0 (-1) 0
+          pos1 = (x1, y+1, z)
+          pos2 = (x2, y+1, z)
+          fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
+          fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
+          voxels = [(x,y,z) | x <- [x1..x2]]
+      initial pos1 pos2 x1 x2
+    --   lift $ printf "GFill: #%d @ %s, #%d @ %s\n" bid1 (show pos1) bid2 (show pos2)
+      grounded <- and <$> mapM willBeGrounded voxels
+      unless grounded $ do
+    --     lift $ printf "layer #%d, Z %d: go High\n" y z
+        setHarmonics bid1 High
+        step
+      issue bid1 $ GFill nd fd1
+      issue bid2 $ GFill nd fd2
+      step
+      markFilled voxels
+      forM_ voxels updateGroundedAtFill
+
+    --   r <- gets (mfResolution . gsModel)
+    --   filled <- gets gsFilled
+    --   matrix <- lift $ BAIO.freeze filled
+    --   lift $ printf "After layer #%d, Z %d:\n%s"
+    --           y z (displayLayer r matrix y)
+
+      count <- gets gsUngroundedCount
+      when (count == 0) $ do
+    --     lift $ printf "layer #%d, Z %d: go Low\n" y z
+        setHarmonics bid1 Low
+        step
+      return ()
+  
+    initial init1 init2 x1 x2 = do
       bot1 <- getBot bid1
       bot2 <- getBot bid2
       let (sx1,_,_) = _pos bot1
@@ -238,22 +247,24 @@ fillSegment bid1 bid2 y (Segment z x1 x2) = do
           move bid2 init2
 
 voidSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
-voidSegment bid1 bid2 y (Segment z x1 x2) = do
-    let nd = NearDiff 0 (-1) 0
-        pos1 = (x1, y+1, z)
-        pos2 = (x2, y+1, z)
-        fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
-        fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
-        voxels = [(x,y,z) | x <- [x1..x2]]
-    initial pos1 pos2
-    issue bid1 $ GVoid nd fd1
-    issue bid2 $ GVoid nd fd2
-    step
-    markVoid voxels
-
-    return ()
+voidSegment bid1 bid2 y (Segment z subsegments) = mapM_ voidSubsegment subsegments
   where
-    initial init1 init2 = do
+    voidSubsegment (x1, x2) = do
+      let nd = NearDiff 0 (-1) 0
+          pos1 = (x1, y+1, z)
+          pos2 = (x2, y+1, z)
+          fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
+          fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
+          voxels = [(x,y,z) | x <- [x1..x2]]
+      initial pos1 pos2 x1 x2
+      issue bid1 $ GVoid nd fd1
+      issue bid2 $ GVoid nd fd2
+      step
+      markVoid voxels
+
+      return ()
+  
+    initial init1 init2 x1 x2 = do
       bot1 <- getBot bid1
       bot2 <- getBot bid2
       let (sx1,_,_) = _pos bot1
@@ -455,6 +466,7 @@ fillLayer bid ldir y = do
 
 voidLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 voidLayer bid ldir y = do
+  setHarmonics bid High
   mbSimple <- checkSimpleLayer y
   case mbSimple of
     Nothing -> do
@@ -515,7 +527,7 @@ test4 = do
   step
   bid2 <- issueFission bid 1 (NearDiff 1 0 0)
   step
-  let segment = Segment 1 5 15
+  let segment = Segment 1 [(5, 15)]
   fillSegment bid bid2 0 segment
   move bid2 (6, 1, 1)
   issueFusion bid bid2
