@@ -55,12 +55,14 @@ instance Binary ModelFile where
 displayByLayer :: ModelFile -> String
 displayByLayer m =
     "Resolution : " ++ show r ++ "\n" ++
-    intercalate "\n\n\n" [displayLayer y | y <- [0 .. r-1]]
+    intercalate "\n\n\n" [displayLayer r matrix y | y <- [0 .. r-1]]
   where
     r = mfResolution m
     matrix = mfMatrix m
 
-    displayLayer y = unlines [displayLine y x | x <- [0 .. r-1]]
+displayLayer :: Word8 -> BitArray P3 -> Word8 -> String
+displayLayer r matrix y = unlines [displayLine y x | x <- [0 .. r-1]]
+  where
 
     displayLine y x = concatMap (displayVoxel y x) [0 .. r-1]
 

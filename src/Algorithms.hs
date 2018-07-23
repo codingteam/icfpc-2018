@@ -8,6 +8,7 @@ import Data.Maybe
 import Data.Binary (decodeFile)
 import Text.Printf
 import qualified Data.Array.BitArray as BA
+import qualified Data.Array.BitArray.IO as BAIO
 import qualified Data.Set as S
 
 import Trace
@@ -138,7 +139,7 @@ data SegmentData = SegmentData {
   }
   deriving (Eq, Show)
 
-data SegmentCheckerState = NotStarted | Started | Ended
+data SegmentCheckerState = NotStarted | Started | Ended | NewSegment
   deriving (Eq, Show)
 
 data SegmentResult = SingleSegment Segment | NoSegments | BadSegmenting
@@ -147,21 +148,24 @@ data SegmentResult = SingleSegment Segment | NoSegments | BadSegmenting
 checkSimpleLine :: Word8 -> Word8 -> Generator SegmentResult
 checkSimpleLine y z = do
     st <- execStateT (go 0) $ SegmentData NotStarted Nothing Nothing False
-    if sdResult st
-      then if sdState st == Ended
-             then return $ SingleSegment $ Segment z (fromJust $ sdStart st) (fromJust $ sdEnd st)
-             else return BadSegmenting
-      else return NoSegments
+    case sdState st of
+      Ended ->
+            let start = fromJust (sdStart st)
+                end   = fromJust (sdEnd st)
+                len   = end - start
+            in  if len > 3 && len < 30
+                  then return $ SingleSegment $ Segment z start end
+                  else return BadSegmenting
+      NewSegment -> return BadSegmenting
+      NotStarted -> return NoSegments
+      s -> fail $ printf "Impossible: state at Y %d, Z %d: %s" y z (show s)
   where
     go :: Word8 -> StateT SegmentData (StateT GeneratorState IO) ()
     go x = do
       r <- lift $ gets (mfResolution . gsModel)
       st <- get
       if x == r
-        then do
-            when (sdState st == Ended) $
-                modify $ \st -> st {sdResult = True}
-            return ()
+        then return ()
         else do
           filled <- lift $ isFilledInModel (x, y, z)
 --           lift $ lift $ printf "%d %d %d : %s\n" x y z (show filled)
@@ -174,10 +178,9 @@ checkSimpleLine y z = do
             (Started, True) -> go (x+1)
             (Started, False) -> do
 --               lift $ lift $ printf "Ended: %d %d %d\n" x y z
-              when (x <= fromJust (sdStart st) + 30 && x >= fromJust (sdStart st) + 4) $
-                  modify $ \st -> st {sdEnd = Just (x-1), sdState = Ended}
+              modify $ \st -> st {sdEnd = Just (x-1), sdState = Ended}
               go (x+1)
-            (Ended, True) -> modify $ \st -> st {sdResult = False}
+            (Ended, True) -> modify $ \st -> st {sdState = NewSegment}
             (Ended, False) -> go (x+1)
 
 fillSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
@@ -193,17 +196,26 @@ fillSegment bid1 bid2 y (Segment z x1 x2) = do
 --   lift $ printf "GFill: #%d @ %s, #%d @ %s\n" bid1 (show pos1) bid2 (show pos2)
   grounded <- and <$> mapM willBeGrounded voxels
   unless grounded $ do
+--     lift $ printf "layer #%d, Z %d: go High\n" y z
     setHarmonics bid1 High
     step
   issue bid1 $ GFill nd fd1
   issue bid2 $ GFill nd fd2
+  step
   markFilled voxels
   forM_ voxels updateGroundedAtFill
+
+--   r <- gets (mfResolution . gsModel)
+--   filled <- gets gsFilled
+--   matrix <- lift $ BAIO.freeze filled
+--   lift $ printf "After layer #%d, Z %d:\n%s"
+--           y z (displayLayer r matrix y)
+
   count <- gets gsUngroundedCount
   when (count == 0) $ do
+--     lift $ printf "layer #%d, Z %d: go Low\n" y z
     setHarmonics bid1 Low
     step
-  step
   return ()
 
 fillSimpleLayer :: BID -> Word8 -> [Segment] -> Generator ()
@@ -215,8 +227,8 @@ fillSimpleLayer bid1 y segments = do
   step
   forM_ segments $ \segment -> do
     fillSegment bid1 bid2 y segment
-  setHarmonics bid1 Low
-  step
+--   setHarmonics bid1 Low
+--   step
   bot1 <- getBot bid1
   let (x1,y1,z1) = _pos bot1
   move bid2 (x1+1, y1, z1)
@@ -305,13 +317,13 @@ runAlgorithm modelPath tracePath alrogithm = do
 
 test3 :: IO ()
 test3 = do
-    model <- decodeFile "problems/FA001_tgt.mdl"
+    model <- decodeFile "problems/FA004_tgt.mdl"
     evalStateT gen =<< initState model
   where
     gen = do
-      res1 <- checkSimpleLine 1 7
+      res1 <- checkSimpleLine 0 8
       lift $ print res1
-      res2 <- checkSimpleLayer 1
+      res2 <- checkSimpleLayer 0
       lift $ print res2
 
 test4 :: Generator ()
