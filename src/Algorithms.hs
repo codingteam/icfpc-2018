@@ -615,6 +615,11 @@ voidThrees bid (l:c:r:line) = do
 
               voidThrees bid line
 
+isLineNonEmpty :: Word8 -> Word8 -> Generator Bool
+isLineNonEmpty y z = do
+   first <- selectFirstInLine LeftToRight y z
+   return $ isJust first
+
 fillLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 fillLayer bid ldir y = do
   mbRect <- checkRectangle y
@@ -623,14 +628,15 @@ fillLayer bid ldir y = do
       fillRectangle bid y rect
     Nothing -> do
       mbSimple <- checkSimpleLayer y
-      case mbSimple of
+      case Nothing of
         Nothing -> do
           r <- gets (mfResolution . gsModel)
           let zs = case ldir of
                      FrontToBack -> [0 .. r-1]
                      BackToFront -> reverse [0 .. r-1]
               dirs = cycle [LeftToRight, RightToLeft]
-          forM_ (zip zs dirs) $ \(z, dir) -> do
+          zs' <- filterM (isLineNonEmpty y) zs
+          forM_ (zip zs' dirs) $ \(z, dir) -> do
             fillLine bid dir y z
         Just segments -> do
           fillSimpleLayer bid y segments
@@ -646,7 +652,8 @@ voidLayer bid ldir y = do
                  FrontToBack -> [0 .. r-1]
                  BackToFront -> reverse [0 .. r-1]
           dirs = cycle [LeftToRight, RightToLeft]
-      forM_ (zip zs dirs) $ \(z, dir) -> do
+      zs' <- filterM (isLineNonEmpty y) zs
+      forM_ (zip zs' dirs) $ \(z, dir) -> do
         voidLine bid dir y z
     Just segments -> do
       voidSimpleLayer bid y segments
