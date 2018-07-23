@@ -153,7 +153,7 @@ checkRectangle y = do
       if z == r
         then return ()
         else do
-          line <- lift $ checkSimpleLine y z 
+          line <- lift $ checkSimpleLine y z
           case (lcState st, line) of
             (NotStarted, SingleSegment (Segment z [(x1, x2)])) -> do
               modify $ \st -> st {
@@ -164,7 +164,7 @@ checkRectangle y = do
                 }
               go (z+1)
             (NotStarted, NoSegments) -> go (z+1)
-            (NotStarted, BadSegmenting) -> 
+            (NotStarted, BadSegmenting) ->
               modify $ \st -> st {lcState = NewSegment}
             (Started, SingleSegment (Segment z [(x1, x2)])) ->
               if lcLeft st == Just x1 && lcRight st == Just x2
@@ -176,9 +176,9 @@ checkRectangle y = do
               modify $ \st -> st {lcState = Ended, lcLastLine = Just (z-1)}
               go (z+1)
             (Ended, NoSegments) -> go (z+1)
-            (_, _) -> 
+            (_, _) ->
               modify $ \st -> st {lcState = NewSegment}
-        
+
 
 data SegmentCheckerState = SegmentCheckerState {
     sdState :: SegmentState,
@@ -391,7 +391,7 @@ fillRectangle bid1 y (Rectangle z1 z2 x1 x2) = do
   move bid3 (x1, y+1, z1+1)
   issueFusion bid1 bid3
   move bid4 (x1+1, y+1, z1)
-  issueFusion bid1 bid4 
+  issueFusion bid1 bid4
   step
   return ()
 
