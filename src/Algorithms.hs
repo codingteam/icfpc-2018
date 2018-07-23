@@ -286,7 +286,7 @@ fillSegment bid1 bid2 y (Segment z subsegments) = mapM_ fillSubsegment subsegmen
         setHarmonics bid1 Low
         step
       return ()
-  
+
     initial init1 init2 x1 x2 = do
       bot1 <- getBot bid1
       bot2 <- getBot bid2
@@ -324,7 +324,7 @@ voidSegment bid1 bid2 y (Segment z subsegments) = mapM_ voidSubsegment subsegmen
       markVoid voxels
 
       return ()
-  
+
     initial init1 init2 x1 x2 = do
       bot1 <- getBot bid1
       bot2 <- getBot bid2
@@ -511,7 +511,7 @@ fillThrees bid (l:c:r:line) = do
               -- If these two points aren't the last in the line, it makes
               -- sense to move to the farther so it's closer to the next
               -- segment. Thus, we rearrange points such that we should always
-              -- to the first one.
+              -- move to the first one.
               let chunk = if (not.null) line then [c, l] else [l, c]
               fillThrees bid chunk
 
@@ -555,10 +555,65 @@ voidLine bid dir y z = do
       return ()
     Just p1 -> do
       r <- gets (mfResolution . gsModel)
-      forM_ (makeLine dir r y z) $ \p -> do
-        ok <- isFilledInModel p
-        when ok $
-          voidVoxel bid dir p
+      line <- dropWhileM (liftM not . isFilledInModel) (makeLine dir r y z)
+      voidThrees bid line
+
+voidThrees :: BID -> [P3] -> Generator ()
+voidThrees _   [] = return ()
+voidThrees bid [p] = do
+  ok <- isFilledInModel p
+  when ok $ do
+    (neighbour, _) <- findFreeNeighbour p
+    move bid neighbour
+    let (Just diff) = nearSub p neighbour
+    issue bid $ DoVoid diff
+    step
+voidThrees bid [l, c] = do
+  okL <- isFilledInModel l
+  okC <- isFilledInModel c
+  case (okL, okC) of
+    (False, False) -> return ()
+    (True, False)  -> voidThrees bid [l]
+    (False, True)  -> voidThrees bid [c]
+    (True, True)   -> do
+      (neighbour, _) <- findFreeNeighbour l
+      move bid neighbour
+      forM_ [l, c] $ \p -> do
+        let (Just diff) = nearSub p neighbour
+        issue bid $ DoVoid diff
+        step
+voidThrees bid (l:c:r:line) = do
+  okL <- isFilledInModel l
+  if not okL
+    then voidThrees bid (c:r:line)
+    else do
+      -- invariant: l has to be filled
+      okC <- isFilledInModel c
+      if not okC
+        then do
+          voidThrees bid [l]
+          voidThrees bid (r:line)
+        else do
+          okR <- isFilledInModel r
+          if not okR
+            then do
+              -- If these two points aren't the last in the line, it makes
+              -- sense to move to the farther so it's closer to the next
+              -- segment. Thus, we rearrange points such that we should always
+              -- move to the first one.
+              let chunk = if (not.null) line then [c, l] else [l, c]
+              voidThrees bid chunk
+
+              voidThrees bid line
+            else do
+              (neighbour, _) <- findFreeNeighbour c
+              move bid neighbour
+              forM_ [l, c, r] $ \p -> do
+                let (Just diff) = nearSub p neighbour
+                issue bid $ DoVoid diff
+                step
+
+              voidThrees bid line
 
 fillLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 fillLayer bid ldir y = do
