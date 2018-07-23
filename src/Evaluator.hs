@@ -44,7 +44,11 @@ evalCmd (FusionP _) = do
   modify $ \st -> st {esActiveBots = esActiveBots st - 1}
   return (-24)
 evalCmd (FusionS _) = return 0 -- this is paired with FussionP so we do not care.
-evalCmd (GFill _ _) = fail "GFill is not supported yet" -- TODO: calculate volume of the region etc
+evalCmd (GFill _ (FarDiff dx dy dz)) =
+  let dx' = fromIntegral $ 1 + (abs dx)
+      dy' = fromIntegral $ 1 + (abs dy)
+      dz' = fromIntegral $ 1 + (abs dz)
+  in  return $ (dx' * dy' * dz') * 6 -- For now we only can produce sequences of 2 GFill's. So * 12 / 2.
 evalCmd (GVoid _ _) = fail "GVoid is not supported yet"
 
 getCommand :: Eval (Maybe Command)
