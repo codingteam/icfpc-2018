@@ -46,8 +46,8 @@ findFreeNeighbour p = do
 --     Just diff -> do
 --       return (nearPlus p diff, diff)
 
-fill :: BID -> LineDirection -> P3 -> Generator ()
-fill bid dir p@(x,y,z) = do
+fill :: BID -> P3 -> Generator ()
+fill bid p@(x,y,z) = do
     (neighbour, diff) <- findFreeNeighbour p
     let diff' = negateNear diff
     move bid neighbour
@@ -262,10 +262,102 @@ fillLine bid dir y z = do
       return ()
     Just p1 -> do
       r <- gets (mfResolution . gsModel)
-      forM_ (makeLine dir r y z) $ \p -> do
-        ok <- isFilledInModel p
-        when ok $
-          fill bid dir p
+      line <- dropWhileM (liftM not . isFilledInModel) (makeLine dir r y z)
+      fillThrees bid line
+
+fillThrees :: BID -> [P3] -> Generator ()
+fillThrees _   [] = return ()
+fillThrees bid [p] = do
+  ok <- isFilledInModel p
+  when ok $ do
+    (neighbour, diff) <- findFreeNeighbour p
+    let diff' = negateNear diff
+    move bid neighbour
+    grounded <- willBeGrounded p
+    unless grounded $
+      setHarmonics bid High
+    issueFill bid diff'
+
+    count <- gets gsUngroundedCount
+    when (count == 0) $
+      setHarmonics bid Low
+
+    step
+fillThrees bid [l, c] = do
+  okL <- isFilledInModel l
+  okC <- isFilledInModel c
+  case (okL, okC) of
+    (False, False) -> return ()
+    (True, False)  -> fillThrees bid [l]
+    (False, True)  -> fillThrees bid [c]
+    (True, True)   -> do
+      (neighbour, _) <- findFreeNeighbour l
+      move bid neighbour
+      forM_ [l, c] $ \p -> do
+        grounded <- willBeGrounded p
+        unless grounded $
+          setHarmonics bid High
+        let (Just diff) = nearSub p neighbour
+        issueFill bid diff
+
+        count <- gets gsUngroundedCount
+        when (count == 0) $
+          setHarmonics bid Low
+
+        step
+fillThrees bid (l:c:r:line) = do
+  okL <- isFilledInModel l
+  if not okL
+    then fillThrees bid (c:r:line)
+    else do
+      -- invariant: l has to be filled
+      okC <- isFilledInModel c
+      if not okC
+        then do
+          fillThrees bid [l]
+          fillThrees bid (r:line)
+        else do
+          okR <- isFilledInModel r
+          if not okR
+            then do
+              -- If these two points aren't the last in the line, it makes
+              -- sense to move to the farther so it's closer to the next
+              -- segment. Thus, we rearrange points such that we should always
+              -- to the first one.
+              let chunk = if (not.null) line then [c, l] else [l, c]
+              fillThrees bid chunk
+
+              fillThrees bid line
+            else do
+              (neighbour, _) <- findFreeNeighbour c
+              move bid neighbour
+              forM_ [l, c, r] $ \p -> do
+                grounded <- willBeGrounded p
+                unless grounded $
+                  setHarmonics bid High
+                let (Just diff) = nearSub p neighbour
+                issueFill bid diff
+
+                count <- gets gsUngroundedCount
+                when (count == 0) $
+                  setHarmonics bid Low
+
+                step
+
+              fillThrees bid line
+
+dropWhileM :: Monad m => (a -> m Bool) -> [a] -> m [a]
+dropWhileM _ [] = return []
+dropWhileM pred list@(x:xs) = do
+  ok <- pred x
+  if ok
+    then dropWhileM pred xs
+    else return list
+
+threes :: [a] -> [[a]]
+threes [] = []
+threes (x:y:z:xs) = [x, y, z] : (threes xs)
+threes list = [list]
 
 voidLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 voidLine bid dir y z = do
