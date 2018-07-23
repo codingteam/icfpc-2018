@@ -185,38 +185,57 @@ checkSimpleLine y z = do
 
 fillSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
 fillSegment bid1 bid2 y (Segment z x1 x2) = do
-  let nd = NearDiff 0 (-1) 0
-      pos1 = (x1, y+1, z)
-      pos2 = (x2, y+1, z)
-      fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
-      fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
-      voxels = [(x,y,z) | x <- [x1..x2]]
-  move bid2 pos2
-  move bid1 pos1
---   lift $ printf "GFill: #%d @ %s, #%d @ %s\n" bid1 (show pos1) bid2 (show pos2)
-  grounded <- and <$> mapM willBeGrounded voxels
-  unless grounded $ do
---     lift $ printf "layer #%d, Z %d: go High\n" y z
-    setHarmonics bid1 High
+    let nd = NearDiff 0 (-1) 0
+        pos1 = (x1, y+1, z)
+        pos2 = (x2, y+1, z)
+        fd1 = FarDiff (fromIntegral (x2-x1)) 0 0
+        fd2 = FarDiff (fromIntegral (x1-x2)) 0 0
+        voxels = [(x,y,z) | x <- [x1..x2]]
+    initial pos1 pos2
+  --   lift $ printf "GFill: #%d @ %s, #%d @ %s\n" bid1 (show pos1) bid2 (show pos2)
+    grounded <- and <$> mapM willBeGrounded voxels
+    unless grounded $ do
+  --     lift $ printf "layer #%d, Z %d: go High\n" y z
+      setHarmonics bid1 High
+      step
+    issue bid1 $ GFill nd fd1
+    issue bid2 $ GFill nd fd2
     step
-  issue bid1 $ GFill nd fd1
-  issue bid2 $ GFill nd fd2
-  step
-  markFilled voxels
-  forM_ voxels updateGroundedAtFill
+    markFilled voxels
+    forM_ voxels updateGroundedAtFill
 
---   r <- gets (mfResolution . gsModel)
---   filled <- gets gsFilled
---   matrix <- lift $ BAIO.freeze filled
---   lift $ printf "After layer #%d, Z %d:\n%s"
---           y z (displayLayer r matrix y)
+  --   r <- gets (mfResolution . gsModel)
+  --   filled <- gets gsFilled
+  --   matrix <- lift $ BAIO.freeze filled
+  --   lift $ printf "After layer #%d, Z %d:\n%s"
+  --           y z (displayLayer r matrix y)
 
-  count <- gets gsUngroundedCount
-  when (count == 0) $ do
---     lift $ printf "layer #%d, Z %d: go Low\n" y z
-    setHarmonics bid1 Low
-    step
-  return ()
+    count <- gets gsUngroundedCount
+    when (count == 0) $ do
+  --     lift $ printf "layer #%d, Z %d: go Low\n" y z
+      setHarmonics bid1 Low
+      step
+    return ()
+  where
+    initial init1 init2 = do
+      bot1 <- getBot bid1
+      bot2 <- getBot bid2
+      let (sx1,_,_) = _pos bot1
+          (sx2,_,_) = _pos bot2
+          -- if dx1 > 0 then we have to move bot1 to the right
+          dx1 = fromIntegral x1 - fromIntegral sx1 :: Int
+          dx2 = fromIntegral x2 - fromIntegral sx2 :: Int
+      -- we know that bot1 is always at left of bot2.
+      case (dx1 > 0, dx2 > 0) of
+        (True, True) -> do -- move both to right. Move rightmost bot first.
+          move bid2 init2
+          move bid1 init1
+        (False, False) -> do -- move both to left. Move leftmost bot first.
+          move bid1 init1
+          move bid2 init2
+        _ -> do -- no matter
+          move bid1 init1
+          move bid2 init2
 
 fillSimpleLayer :: BID -> Word8 -> [Segment] -> Generator ()
 fillSimpleLayer bid1 y segments = do
