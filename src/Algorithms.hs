@@ -543,7 +543,7 @@ fillThrees bid (l:c:r:line) = do
               -- sense to move to the farther so it's closer to the next
               -- segment. Thus, we rearrange points such that we should always
               -- move to the first one.
-              let chunk = if (not.null) line then [c, l] else [l, c]
+              let chunk = if (not.null) line then [l, c] else [c, l]
               fillThrees bid chunk
 
               fillThrees bid line
@@ -632,7 +632,7 @@ voidThrees bid (l:c:r:line) = do
               -- sense to move to the farther so it's closer to the next
               -- segment. Thus, we rearrange points such that we should always
               -- move to the first one.
-              let chunk = if (not.null) line then [c, l] else [l, c]
+              let chunk = if (not.null) line then [l, c] else [c, l]
               voidThrees bid chunk
 
               voidThrees bid line
