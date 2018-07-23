@@ -107,7 +107,7 @@ selectBest modelPath tracePaths = do
   traces <- mapM readTrace tracePaths
   res <- forM (zip tracePaths traces) $ \(path, trace) -> do
            let energy = evalTrace model trace
-           printf "%s : %d\n" path energy
+           -- printf "%s : %d\n" path energy
            return (path, energy)
   let path = fst $ minimumBy (comparing snd) res
   putStrLn path
