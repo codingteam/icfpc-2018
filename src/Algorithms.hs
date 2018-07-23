@@ -298,11 +298,14 @@ fillSegment bid1 bid2 y (Segment z subsegments) = mapM_ fillSubsegment subsegmen
       -- we know that bot1 is always at left of bot2.
       case (dx1 > 0, dx2 > 0) of
         (True, True) -> do -- move both to right. Move rightmost bot first.
-          moveAll [bid2, bid1] [init2, init1]
+          move bid2 init2
+          move bid1 init1
         (False, False) -> do -- move both to left. Move leftmost bot first.
-          moveAll [bid1, bid2] [init1, init2]
+          move bid1 init1
+          move bid2 init2
         _ -> do -- no matter
-          moveAll [bid1, bid2] [init1, init2]
+          move bid1 init1
+          move bid2 init2
 
 voidSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
 voidSegment bid1 bid2 y (Segment z subsegments) = mapM_ voidSubsegment subsegments
@@ -438,14 +441,48 @@ voidSimpleLayer bid1 y segments = do
 
 fillLine :: BID -> LineDirection -> Word8 -> Word8 -> Generator ()
 fillLine bid dir y z = do
-  mbP1 <- selectFirstInLine dir y z
-  case mbP1 of
-    Nothing -> -- fail $ printf "dont know where to start line: Y=%d, Z=%d" y z
-      return ()
-    Just p1 -> do
+    mbP1 <- selectFirstInLine dir y z
+    case mbP1 of
+      Nothing -> -- fail $ printf "dont know where to start line: Y=%d, Z=%d" y z
+        return ()
+      Just p1 -> do
+        mbSegment <- checkSimpleLine y z
+        case mbSegment of
+          BadSegmenting -> plainMode
+          NoSegments -> return () -- we shouldn't get here
+          SingleSegment segment -> do
+            goodPos <- checkPos
+            if goodPos && longEnough segment
+              then doSegment segment
+              else plainMode
+  where
+    plainMode = do
       r <- gets (mfResolution . gsModel)
       line <- dropWhileM (liftM not . isFilledInModel) (makeLine dir r y z)
       fillThrees bid line
+
+    checkPos = do
+      bot <- getBot bid
+      r <- gets (mfResolution . gsModel)
+      let (x,_,_) = _pos bot
+      return $ x < r-1
+
+    longEnough (Segment _ pairs) =
+      and [x2 - x1 > 5 | (x1,x2) <- pairs]
+
+    doSegment segment = do
+      issue bid $ SMove $ LongLinDiff Y 1
+      setBotPos bid $ \(x,y,z) -> (x,y+1,z)
+      step
+      bid2 <- issueFission bid 1 (NearDiff 1 0 0)
+      step
+      fillSegment bid bid2 y segment
+      bot <- getBot bid
+      let (x,y,z) = _pos bot
+      move bid2 (x+1,y,z)
+      issueFusion bid bid2
+      step
+
 
 fillThrees :: BID -> [P3] -> Generator ()
 fillThrees _   [] = return ()
