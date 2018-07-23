@@ -628,7 +628,7 @@ fillLayer bid ldir y = do
       fillRectangle bid y rect
     Nothing -> do
       mbSimple <- checkSimpleLayer y
-      case Nothing of
+      case mbSimple of
         Nothing -> do
           r <- gets (mfResolution . gsModel)
           let zs = case ldir of
