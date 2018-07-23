@@ -2,8 +2,8 @@
 
 ## Build Prerequisites
 
-You'll need [Haskell Stack][stack]. We had teammates working on Linux and
-Windows, so it should work fine on these platforms.
+You'll need [Haskell Stack][stack]. We had teammates running Linux and Windows,
+so it should work fine on those platforms.
 
 There are two helper scripts, one written in BASH and another in Perl, but they
 aren't essential to problem-solving--they were only used to prepare submissions.
@@ -51,10 +51,10 @@ Reconstruction problems are solved naively: first deconstruct, then construct.
 
 In randomized order:
 
-Friedrich von Never
-ulidtko
-Ilya Portnov
-Akon32
-Alexander Batischev
+- Friedrich von Never
+- ulidtko
+- Ilya Portnov
+- Akon32
+- Alexander Batischev
 
 Thank you for the great three days of fun!
