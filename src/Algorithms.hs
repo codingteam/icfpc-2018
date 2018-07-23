@@ -174,7 +174,7 @@ checkSimpleLine y z = do
             (Started, True) -> go (x+1)
             (Started, False) -> do
 --               lift $ lift $ printf "Ended: %d %d %d\n" x y z
-              when (x <= fromJust (sdStart st) + 30) $
+              when (x <= fromJust (sdStart st) + 30 && x >= fromJust (sdStart st) + 4) $
                   modify $ \st -> st {sdEnd = Just (x-1), sdState = Ended}
               go (x+1)
             (Ended, True) -> modify $ \st -> st {sdResult = False}
