@@ -131,15 +131,72 @@ checkSimpleLayer y = do
         NoSegments -> go (Just segs) (z-1)
         SingleSegment segment -> go (Just (segment : segs)) (z-1)
 
-data SegmentData = SegmentData {
-    sdState :: SegmentCheckerState,
+data Rectangle = Rectangle Word8 Word8 Word8 Word8 -- Z1 Z2 X1 X2
+  deriving (Eq, Show)
+
+checkRectangle :: Word8 -> Generator (Maybe Rectangle)
+checkRectangle y = do
+    st <- execStateT (go 0) $ LayerCheckerState NotStarted Nothing Nothing Nothing Nothing
+    case lcState st of
+      Ended -> do
+        let first = fromJust (lcFirstLine st)
+            last  = fromJust (lcLastLine st)
+            left  = fromJust (lcLeft st)
+            right = fromJust (lcRight st)
+        return $ Just $ Rectangle first last left right
+      _ -> return Nothing
+  where
+    go :: Word8 -> StateT LayerCheckerState (StateT GeneratorState IO) ()
+    go z = do
+      r <- lift $ gets (mfResolution . gsModel)
+      st <- get
+      if z == r
+        then return ()
+        else do
+          line <- lift $ checkSimpleLine y z 
+          case (lcState st, line) of
+            (NotStarted, SingleSegment (Segment z [(x1, x2)])) -> do
+              modify $ \st -> st {
+                  lcState = Started,
+                  lcFirstLine = Just z,
+                  lcLeft = Just x1,
+                  lcRight = Just x2
+                }
+              go (z+1)
+            (NotStarted, NoSegments) -> go (z+1)
+            (NotStarted, BadSegmenting) -> 
+              modify $ \st -> st {lcState = NewSegment}
+            (Started, SingleSegment (Segment z [(x1, x2)])) ->
+              if lcLeft st == Just x1 && lcRight st == Just x2
+                then go (z+1)
+                else modify $ \st -> st {lcState = NewSegment}
+            (Started, BadSegmenting) ->
+              modify $ \st -> st {lcState = NewSegment}
+            (Started, NoSegments) -> do
+              modify $ \st -> st {lcState = Ended, lcLastLine = Just (z-1)}
+              go (z+1)
+            (Ended, NoSegments) -> go (z+1)
+            (_, _) -> 
+              modify $ \st -> st {lcState = NewSegment}
+        
+
+data SegmentCheckerState = SegmentCheckerState {
+    sdState :: SegmentState,
     sdStart :: Maybe Word8,
-    sdEnd :: Maybe Word8,
-    sdResult :: Bool
+    sdEnd :: Maybe Word8
   }
   deriving (Eq, Show)
 
-data SegmentCheckerState = NotStarted | Started | Ended | NewSegment
+data LayerCheckerState = LayerCheckerState {
+    lcState :: SegmentState,
+    lcFirstLine :: Maybe Word8,
+    lcLastLine :: Maybe Word8,
+    lcLeft :: Maybe Word8,
+    lcRight :: Maybe Word8
+  }
+  deriving (Eq, Show)
+
+data SegmentState = NotStarted | Started | Ended | NewSegment
   deriving (Eq, Show)
 
 data SegmentResult = SingleSegment Segment | NoSegments | BadSegmenting
@@ -147,20 +204,22 @@ data SegmentResult = SingleSegment Segment | NoSegments | BadSegmenting
 
 checkSimpleLine :: Word8 -> Word8 -> Generator SegmentResult
 checkSimpleLine y z = do
-    st <- execStateT (go 0) $ SegmentData NotStarted Nothing Nothing False
+    st <- execStateT (go 0) $ SegmentCheckerState NotStarted Nothing Nothing
     case sdState st of
       Ended ->
             let start = fromJust (sdStart st)
                 end   = fromJust (sdEnd st)
                 len   = end - start
             in  if len > 3
-                  then return $ SingleSegment $ Segment z $ split [] start end
+                  then case split [] start end of
+                         Just subs -> return $ SingleSegment $ Segment z subs
+                         Nothing -> return BadSegmenting
                   else return BadSegmenting
       NewSegment -> return BadSegmenting
       NotStarted -> return NoSegments
       s -> fail $ printf "Impossible: state at Y %d, Z %d: %s" y z (show s)
   where
-    go :: Word8 -> StateT SegmentData (StateT GeneratorState IO) ()
+    go :: Word8 -> StateT SegmentCheckerState (StateT GeneratorState IO) ()
     go x = do
       r <- lift $ gets (mfResolution . gsModel)
       st <- get
@@ -183,12 +242,14 @@ checkSimpleLine y z = do
             (Ended, True) -> modify $ \st -> st {sdState = NewSegment}
             (Ended, False) -> go (x+1)
 
-    split :: [(Word8, Word8)] -> Word8 -> Word8 -> [(Word8, Word8)]
+    split :: [(Word8, Word8)] -> Word8 -> Word8 -> Maybe [(Word8, Word8)]
     split result start end
-      | end - start < 30 = result ++ [(start, end)]
+      | end - start < 30 = Just $ result ++ [(start, end)]
       | otherwise =
         let x1 = start + 29
-        in  split (result ++ [(start, x1)]) (x1+1) end
+        in  if end - (x1+1) > 3
+              then split (result ++ [(start, x1)]) (x1+1) end
+              else Nothing
 
 fillSegment :: BID -> BID -> Word8 -> Segment -> Generator ()
 fillSegment bid1 bid2 y (Segment z subsegments) = mapM_ fillSubsegment subsegments
@@ -283,6 +344,56 @@ voidSegment bid1 bid2 y (Segment z subsegments) = mapM_ voidSubsegment subsegmen
         _ -> do -- no matter
           move bid1 init1
           move bid2 init2
+
+fillRectangle :: BID -> Word8 -> Rectangle -> Generator ()
+fillRectangle bid1 y (Rectangle z1 z2 x1 x2) = do
+  let nd = NearDiff 0 (-1) 0
+      pos1 = (x1, y+1, z1)
+      pos2 = (x2, y+1, z1)
+      pos3 = (x1, y+1, z2)
+      pos4 = (x2, y+1, z2)
+      fd1 = FarDiff (fromIntegral (x2-x1)) 0 (fromIntegral (z2-z1))
+      fd2 = FarDiff (fromIntegral (x1-x2)) 0 (fromIntegral (z2-z1))
+      fd3 = FarDiff (fromIntegral (x2-x1)) 0 (fromIntegral (z1-z2))
+      fd4 = FarDiff (fromIntegral (x1-x2)) 0 (fromIntegral (z1-z2))
+      voxels = [(x,y,z) | x <- [x1..x2], z <- [z1..z2]]
+  move bid1 pos1
+  bid4 <- issueFission bid1 1 (NearDiff 1 0 0)
+  step
+  move bid4 pos4
+  bid2 <- issueFission bid1 1 (NearDiff 1 0 0)
+  step
+  move bid2 pos2
+  bid3 <- issueFission bid1 1 (NearDiff 0 0 1)
+  step
+  move bid3 pos3
+
+  grounded <- and <$> mapM willBeGrounded voxels
+  unless grounded $ do
+--     lift $ printf "layer #%d, Z %d: go High\n" y z
+    setHarmonics bid1 High
+    step
+  issue bid1 $ GFill nd fd1
+  issue bid2 $ GFill nd fd2
+  issue bid3 $ GFill nd fd3
+  issue bid4 $ GFill nd fd4
+  step
+  markFilled voxels
+  forM_ voxels updateGroundedAtFill
+  count <- gets gsUngroundedCount
+  when (count == 0) $ do
+--     lift $ printf "layer #%d, Z %d: go Low\n" y z
+    setHarmonics bid1 Low
+    step
+  move bid2 (x1+1, y+1, z1)
+  issueFusion bid1 bid2
+  step
+  move bid3 (x1, y+1, z1+1)
+  issueFusion bid1 bid3
+  move bid4 (x1+1, y+1, z1)
+  issueFusion bid1 bid4 
+  step
+  return ()
 
 fillSimpleLayer :: BID -> Word8 -> [Segment] -> Generator ()
 fillSimpleLayer bid1 y segments = do
@@ -451,18 +562,23 @@ voidLine bid dir y z = do
 
 fillLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 fillLayer bid ldir y = do
-  mbSimple <- checkSimpleLayer y
-  case mbSimple of
+  mbRect <- checkRectangle y
+  case mbRect of
+    Just rect -> do
+      fillRectangle bid y rect
     Nothing -> do
-      r <- gets (mfResolution . gsModel)
-      let zs = case ldir of
-                 FrontToBack -> [0 .. r-1]
-                 BackToFront -> reverse [0 .. r-1]
-          dirs = cycle [LeftToRight, RightToLeft]
-      forM_ (zip zs dirs) $ \(z, dir) -> do
-        fillLine bid dir y z
-    Just segments -> do
-      fillSimpleLayer bid y segments
+      mbSimple <- checkSimpleLayer y
+      case mbSimple of
+        Nothing -> do
+          r <- gets (mfResolution . gsModel)
+          let zs = case ldir of
+                     FrontToBack -> [0 .. r-1]
+                     BackToFront -> reverse [0 .. r-1]
+              dirs = cycle [LeftToRight, RightToLeft]
+          forM_ (zip zs dirs) $ \(z, dir) -> do
+            fillLine bid dir y z
+        Just segments -> do
+          fillSimpleLayer bid y segments
 
 voidLayer :: BID -> LayerDirection -> Word8 -> Generator ()
 voidLayer bid ldir y = do
@@ -511,7 +627,7 @@ runAlgorithm modelPath tracePath alrogithm = do
 
 test3 :: IO ()
 test3 = do
-    model <- decodeFile "problems/FA004_tgt.mdl"
+    model <- decodeFile "problems/FA019_tgt.mdl"
     evalStateT gen =<< initState model
   where
     gen = do
@@ -519,6 +635,8 @@ test3 = do
       lift $ print res1
       res2 <- checkSimpleLayer 0
       lift $ print res2
+      res3 <- checkRectangle 0
+      lift $ print res3
 
 test4 :: Generator ()
 test4 = do
