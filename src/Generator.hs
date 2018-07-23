@@ -95,9 +95,19 @@ getBot bid = do
 issue :: BID -> Command -> Generator ()
 issue bid cmd = do
   checkBid bid
+  stepNo <- gets gsStepNumber
   trace <- getBotTrace bid
-  let trace' = trace |> cmd
-  modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
+  if length trace > stepNo
+    then do
+        lift $ printf "WARN: repeated command for bot #%d at step #%d (trace length is %d). Will do step.\n"
+                 bid stepNo (length trace)
+        step
+        trace <- getBotTrace bid
+        let trace' = trace |> cmd
+        modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
+    else do
+        let trace' = trace |> cmd
+        modify $ \st -> st {gsTraces = gsTraces st // [(bid, trace')]}
 
 -- | Issue Flip command and remember resulting harmonics.
 issueFlip :: BID -> Generator ()
@@ -120,6 +130,8 @@ issueFission bid n direction = do
                 _seeds = take n srcSeeds,
                 _pos = nearPlus (_pos bot1) direction
               }
+  step <- gets gsStepNumber
+  lift $ printf "Fission: step #%d+1, alive %s, new %d\n" step (show $ aliveBids) newBid
   modify $ \st -> st {
       gsBots = gsBots st // [(bid, bot1'), (newBid, bot2')],
       gsAliveBots = (gsStepNumber st + 1, newBid : aliveBids) : gsAliveBots st
