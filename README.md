@@ -53,8 +53,8 @@ In randomized order:
 
 - Friedrich von Never
 - ulidtko
-- Ilya Portnov
+- Ilya Portnov ([report (in Russian)](https://iportnov.blogspot.com/2018/07/icfpc-2018.html))
 - Akon32
-- Alexander Batischev
+- Alexander Batischev ([report (in Russian)](https://blog.debiania.in.ua/posts/2018-10-28-icfpc-2018.html))
 
 Thank you for the great three days of fun!
